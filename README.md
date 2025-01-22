@@ -1,7 +1,11 @@
+# Okane
+![Coverage](https://img.shields.io/badge/coverage-99%25-brightgreen)
+![Coverage](https://img.shields.io/badge/Author-@albertjjimenezp-brightgreen)
+-------------------------------![Author](https://avatars.githubusercontent.com/u/35118534?s=200&u=80708c1558e4e482d52d31490959442f618a2d62&v=4)----------🐱‍👤
 # Proyecto Okane
 
 ## Descripción
-**Okane** es una aplicación interactiva diseñada para ayudarte a gestionar tus finanzas de manera eficiente y clara. Este proyecto utiliza Flutter como tecnología principal, implementando las mejores prácticas de desarrollo con el patrón **BLoC**.
+**Okane** es una aplicación interactiva diseñada para ayudarte a gestionar tus finanzas de manera eficiente y clara. Este proyecto utiliza Flutter como tecnología principal, implementando las mejores prácticas de desarrollo con el patrón **BLoC** y testeando el paquete de jocaagura_domain asi como jocaaguraarchetype para la comunidad con el animo de fomentar su uso y explicar mejores practicas a nivel de desarrollo estandarizado de proyectos.
 
 La estructura del proyecto está optimizada para garantizar modularidad, escalabilidad y un manejo claro de las responsabilidades.
 
@@ -34,9 +38,8 @@ La organización de archivos y carpetas sigue un enfoque basado en Clean Archite
 ---
 Diseño del Proyecto
 
-El diseño interactivo de la aplicación está disponible en Figma. Este diseño proporciona una guía visual para la interfaz de usuario y la experiencia del usuario, asegurando que todas las partes interesadas estén alineadas en términos de apariencia y funcionalidad.
+El diseño interactivo de la aplicación está disponible en [Figma](https://www.figma.com/design/MjDb1KcxAIdl7dP2LDa81J/Okane-Interactivo?node-id=52815-6437). Este diseño proporciona una guía visual para la interfaz de usuario y la experiencia del usuario, asegurando que todas las partes interesadas estén alineadas en términos de apariencia y funcionalidad.
 
-URL de Figma: [Okane Interactivo]()
 ---
 
 ## Dependencias
@@ -117,10 +120,11 @@ Si deseas contribuir al proyecto, puedes seguir estos pasos:
 Para más información sobre los paquetes utilizados:
 - [jocaagura_domain README](https://github.com/jocaagura/jocaagura_domain/blob/master/README.md)
 - [jocaaguraarchetype README](https://github.com/jocaagura/jocaaguraarchetype/blob/master/README.md)
+- [Play store](https://play.google.com/store/apps/details?id=co.com.okane.okane)
+- [figma](https://www.figma.com/design/MjDb1KcxAIdl7dP2LDa81J/Okane-Interactivo?node-id=52815-6437)
 
 Si tienes dudas o sugerencias, no dudes en comunicarte con el equipo de desarrollo.
 
 ---
 
 **Nota**: Esta documentación es inicial y se actualizará a medida que el proyecto evolucione.
-
