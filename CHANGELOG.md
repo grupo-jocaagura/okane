@@ -12,5 +12,9 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
-## [0.0.3] - 2028-12-28
+## [1.0.0] - 2025-01-22
 
+### Added
+- Initialized the new Okane repository with basic configurations to replace the outdated code previously published on the Play Store.
+- Set up a public repository to continue using GitHub Actions for workflows and validations.
+- Enabled collaboration with the general public through issues and pull requests.

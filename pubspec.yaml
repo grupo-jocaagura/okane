@@ -1,7 +1,7 @@
 name: okane
 description: "Interactive coach to help you manage your finances efficiently and clearly."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 0.0.9+1
+version: 1.1.0
 
 environment:
   sdk: ^3.5.4
@@ -9,20 +9,13 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.2.1
-  jocaagura_domain:
-    git:
-      url: https://github.com/jocaagura/jocaagura_domain
-      ref: master
-  jocaaguraarchetype:
-    git:
-      url: https://github.com/jocaagura/jocaaguraarchetype
-      ref: master
+  jocaagura_domain: ^1.15.2
   text_responsive: ^1.2.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
