@@ -115,6 +115,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.15.2"
+  jocaaguraarchetype:
+    dependency: "direct main"
+    description:
+      name: jocaaguraarchetype
+      sha256: ed37fc018a265ac5bc379080cecefd4932a5a4c26d1db99429b0dde77196b0f6
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.1"
   leak_tracker:
     dependency: transitive
     description:
