@@ -7,13 +7,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:okane/main.dart';
+import 'package:jocaaguraarchetype/ui/jocaagura_app.dart';
+import 'package:okane/config.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(JocaaguraApp(appManager: appManager));
+    await tester.pumpAndSettle(
+      const Duration(seconds: 10),
+    );
 
     // Verify that our counter starts at 0.
     expect(find.text('0'), findsOneWidget);
