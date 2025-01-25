@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+## [1.1.0] - 2025-01-24
+
+### Added
+- Created `config.dart` and `global_theme` for the initial configuration of the Okane app.
+- Added Roboto font files and their usage license to the `assets` directory for use and download.
+- Successfully implemented the `jocaaguraarchetype` package for general dependency injection configuration.
+
+### Updated
+- Added the `coverage` folder to `.gitignore` to prevent it from being stored in the repository.
+
 ## [1.0.1] - 2025-01-22
 
 ### Added
