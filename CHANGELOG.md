@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+## [1.2.0] - 2025-03-16
+
+### Added
+- Implemented `BlocUserLedger` for managing financial movements.
+- Added unit tests for `BlocUserLedger` to ensure correct behavior.
+- Created `ErrorItem` to handle error messages related to financial transactions.
+- Created `LedgerException` to manage exceptions in financial operations.
+- Added `MoneyUtils`, which provides financial and monetary conversion utilities, including the summation of financial movements.
+
+## [1.1.0] - 2025-01-24
+
+### Added
+- Created `CONTRIBUTING.md` for the contributors of the Okane app.
+
 ## [1.1.0] - 2025-01-24
 
 ### Added
