@@ -9,7 +9,7 @@ dependencies:
   flutter:
     sdk: flutter
   google_fonts: ^6.2.1
-  jocaagura_domain: ^1.15.2
+  jocaagura_domain: ^1.17.0
   text_responsive: ^1.2.1
   jocaaguraarchetype: ^1.5.1
 
