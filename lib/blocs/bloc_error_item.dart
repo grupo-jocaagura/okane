@@ -4,6 +4,8 @@ import 'package:jocaagura_domain/jocaagura_domain.dart';
 ///
 /// Este BLoC permite centralizar el reporte, observación y limpieza de errores en tiempo real.
 class BlocError extends BlocModule {
+  static const String name = 'blocError';
+
   final BlocGeneral<ErrorItem?> lastError = BlocGeneral<ErrorItem?>(null);
 
   /// Reporta un nuevo error al estado reactivo.

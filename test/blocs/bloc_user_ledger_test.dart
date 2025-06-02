@@ -60,7 +60,7 @@ void main() {
 
     await bloc.initialize();
 
-    expect(bloc.userLedger.value.nameOfLedger, 'test');
+    expect(bloc.userLedger.nameOfLedger, 'test');
   });
 
   test('initialize reporta errores correctamente', () async {
@@ -86,7 +86,7 @@ void main() {
         await bloc.addIncome(movement);
 
     expect(result.isRight, true);
-    expect(bloc.userLedger.value.nameOfLedger, 'test');
+    expect(bloc.userLedger.nameOfLedger, 'test');
   });
 
   test('addExpense captura error y lo reporta', () async {

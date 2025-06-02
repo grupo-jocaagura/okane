@@ -35,9 +35,9 @@ class BlocUserLedger extends BlocModule {
         _canSpend = canSpend,
         _blocError = blocError,
         _getBalance = getBalance;
-  final BlocGeneral<LedgerModel> userLedger =
+  final BlocGeneral<LedgerModel> _userLedger =
       BlocGeneral<LedgerModel>(defaultOkaneLedger);
-
+  static const String name = 'blocUserLedger';
   final AddIncomeUseCase _addIncome;
   final AddExpenseUseCase _addExpense;
   final GetLedgerUseCase _getLedger;
@@ -46,19 +46,22 @@ class BlocUserLedger extends BlocModule {
   final GetBalanceUseCase _getBalance;
   final BlocError _blocError;
 
+  Stream<LedgerModel> get ledgerModelStream => _userLedger.stream;
+  LedgerModel get userLedger => _userLedger.value;
+
   /// Inicializa el ledger con los datos remotos y comienza a escuchar cambios.
   Future<void> initialize() async {
     final Either<ErrorItem, LedgerModel> result = await _getLedger.execute();
     result.when(
       (ErrorItem error) => _blocError.report(error),
-      (LedgerModel ledger) => userLedger.value = ledger,
+      (LedgerModel ledger) => _userLedger.value = ledger,
     );
 
     _listenLedger.execute().listen((Either<ErrorItem, LedgerModel> event) {
       event.when(
         (ErrorItem error) =>
             _blocError.report(error), // manejar error si es necesario
-        (LedgerModel remoteLedger) => userLedger.value = remoteLedger,
+        (LedgerModel remoteLedger) => _userLedger.value = remoteLedger,
       );
     });
   }
@@ -70,8 +73,12 @@ class BlocUserLedger extends BlocModule {
     final Either<ErrorItem, LedgerModel> result =
         await _addIncome.execute(movement);
     result.when(
-      (ErrorItem error) => _blocError.report(error),
-      (LedgerModel ledger) => userLedger.value = ledger,
+      (ErrorItem error) {
+        _blocError.report(error);
+      },
+      (LedgerModel ledger) {
+        _userLedger.value = ledger;
+      },
     );
     return result;
   }
@@ -84,25 +91,25 @@ class BlocUserLedger extends BlocModule {
         await _addExpense.execute(movement);
     result.when(
       (ErrorItem error) => _blocError.report(error),
-      (LedgerModel ledger) => userLedger.value = ledger,
+      (LedgerModel ledger) => _userLedger.value = ledger,
     );
     return result;
   }
 
   /// Retorna `true` si el usuario puede gastar el monto indicado.
   bool canISpendIt(int amount) {
-    return _canSpend.execute(userLedger.value, amount);
+    return _canSpend.execute(_userLedger.value, amount);
   }
 
   /// Balance total del usuario.
-  int get balance => _getBalance.execute(userLedger.value);
+  int get balance => _getBalance.execute(_userLedger.value);
 
   /// Representación en texto del estado del ledger.
   @override
   String toString() {
     return '''
-✔ Ingresos: ${MoneyUtils.totalAmount(userLedger.value.incomeLedger)}
-💸 Gastos: ${MoneyUtils.totalAmount(userLedger.value.expenseLedger)}
+✔ Ingresos: ${MoneyUtils.totalAmount(_userLedger.value.incomeLedger)}
+💸 Gastos: ${MoneyUtils.totalAmount(_userLedger.value.expenseLedger)}
 📒 Balance: $balance
 ''';
   }
@@ -110,6 +117,6 @@ class BlocUserLedger extends BlocModule {
   /// Libera los recursos del Bloc.
   @override
   void dispose() {
-    userLedger.dispose();
+    _userLedger.dispose();
   }
 }
