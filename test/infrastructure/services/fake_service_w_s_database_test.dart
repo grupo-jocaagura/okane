@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:okane/domain/gateway/ledger_ws_gateway.dart';
 import 'package:okane/infrastructure/services/fake_service_w_s_database.dart';
 
 void main() {
   late FakeServiceWSDatabase service;
-  const String path = 'okane/test';
+  const String path = LedgerWsGateway.ledgerPath;
 
   final Map<String, dynamic> sampleLedger = <String, dynamic>{
     'nameOfLedger': 'test',
@@ -22,7 +23,7 @@ void main() {
 
   test('read devuelve error si no hay ledger', () async {
     final Either<ErrorItem, Map<String, dynamic>> result =
-        await service.read(path);
+        await service.read('path');
     expect(result.isLeft, true);
     expect(
       result.when(
@@ -85,7 +86,7 @@ void main() {
     service.reset();
 
     final Either<ErrorItem, Map<String, dynamic>> result =
-        await service.read(path);
+        await service.read('path');
     expect(result.isLeft, true);
 
     final List<ErrorItem> errores = <ErrorItem>[];
