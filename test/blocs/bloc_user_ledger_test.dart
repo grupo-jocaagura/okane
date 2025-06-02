@@ -1,172 +1,123 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:okane/blocs/bloc_error_item.dart';
 import 'package:okane/blocs/bloc_user_ledger.dart';
-import 'package:okane/domain/error_item.dart';
+
+import '../mocks/mocks.dart';
+
+class FakeLedgerModel extends Fake implements LedgerModel {}
 
 void main() {
-  late BlocUserLedger ledger;
+  late BlocUserLedger bloc;
+  late BlocError errorBloc;
 
-  setUp(() {
-    ledger = BlocUserLedger();
+  late MockAddIncomeUseCase addIncome;
+  late MockAddExpenseUseCase addExpense;
+  late MockGetLedgerUseCase getLedger;
+  late MockListenLedgerUseCase listenLedger;
+  late MockCanSpendUseCase canSpend;
+  late MockGetBalanceUseCase getBalance;
+
+  const LedgerModel fakeLedger = LedgerModel(
+    nameOfLedger: 'test',
+    incomeLedger: <FinancialMovementModel>[],
+    expenseLedger: <FinancialMovementModel>[],
+  );
+
+  final FinancialMovementModel movement = defaultMovement;
+  setUpAll(() {
+    registerFallbackValue(defaultMovement);
+    registerFallbackValue(FakeLedgerModel());
   });
 
-  group('BlocUserLedger Tests', () {
-    test('El balance inicial debe ser 0', () {
-      expect(ledger.balance, 0);
-    });
+  setUp(() {
+    registerFallbackValue(movement);
+    errorBloc = BlocError();
 
-    test('Debe registrar un ingreso válido', () {
-      final FinancialMovementModel movement = FinancialMovementModel(
-        id: '1',
-        amount: 10000, // 100 COP
-        date: DateTime.now(),
-        concept: 'Salario',
-        category: 'Ingreso',
-        createdAt: DateTime.now(),
-      );
+    addIncome = MockAddIncomeUseCase();
+    addExpense = MockAddExpenseUseCase();
+    getLedger = MockGetLedgerUseCase();
+    listenLedger = MockListenLedgerUseCase();
+    canSpend = MockCanSpendUseCase();
+    getBalance = MockGetBalanceUseCase();
 
-      final Either<ErrorItem, List<FinancialMovementModel>> result =
-          ledger.addIncome(movement);
+    bloc = BlocUserLedger(
+      addIncome: addIncome,
+      addExpense: addExpense,
+      getLedger: getLedger,
+      listenLedger: listenLedger,
+      canSpend: canSpend,
+      getBalance: getBalance,
+      blocError: errorBloc,
+    );
+  });
 
-      expect(result.isRight, true);
-      expect(ledger.sumIncomeLedger, 10000);
-      expect(ledger.balance, 10000);
-    });
+  test('initialize actualiza el estado correctamente', () async {
+    when(() => getLedger.execute())
+        .thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
+    when(() => listenLedger.execute()).thenAnswer(
+      (_) => const Stream<Either<ErrorItem, LedgerModel>>.empty(),
+    );
 
-    test('Debe registrar un egreso válido si hay saldo suficiente', () {
-      final FinancialMovementModel income = FinancialMovementModel(
-        id: '1',
-        amount: 20000, // 200 COP
-        date: DateTime.now(),
-        concept: 'Pago',
-        category: 'Ingreso',
-        createdAt: DateTime.now(),
-      );
+    await bloc.initialize();
 
-      ledger.addIncome(income);
+    expect(bloc.userLedger.value.nameOfLedger, 'test');
+  });
 
-      final FinancialMovementModel expense = FinancialMovementModel(
-        id: '2',
-        amount: 15000, // 150 COP
-        date: DateTime.now(),
-        concept: 'Compra',
-        category: 'Egreso',
-        createdAt: DateTime.now(),
-      );
+  test('initialize reporta errores correctamente', () async {
+    const ErrorItem error =
+        ErrorItem(title: 'fail', description: 'network', code: 'ERR');
+    when(() => getLedger.execute())
+        .thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
+    when(() => listenLedger.execute()).thenAnswer(
+      (_) => const Stream<Either<ErrorItem, LedgerModel>>.empty(),
+    );
 
-      final Either<ErrorItem, List<FinancialMovementModel>> result =
-          ledger.addExpense(expense);
+    await bloc.initialize();
 
-      expect(result.isRight, true);
-      expect(ledger.sumExpenseLedger, 15000);
-      expect(ledger.balance, 5000);
-    });
+    expect(errorBloc.lastError.value, isNotNull);
+    expect(errorBloc.lastError.value?.title, 'fail');
+  });
 
-    test(
-        'Debe retornar un error al registrar un ingreso con monto 0 o negativo',
-        () {
-      final FinancialMovementModel invalidIncome = FinancialMovementModel(
-        id: '3',
-        amount: 0,
-        date: DateTime.now(),
-        concept: 'Prueba',
-        category: 'Ingreso',
-        createdAt: DateTime.now(),
-      );
+  test('addIncome actualiza el estado', () async {
+    when(() => addIncome.execute(any()))
+        .thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
 
-      final Either<ErrorItem, List<FinancialMovementModel>> result =
-          ledger.addIncome(invalidIncome);
+    final Either<ErrorItem, LedgerModel> result =
+        await bloc.addIncome(movement);
 
-      expect(result.isLeft, true);
-      final ErrorItem? error =
-          result.when((ErrorItem error) => error, (_) => null);
+    expect(result.isRight, true);
+    expect(bloc.userLedger.value.nameOfLedger, 'test');
+  });
 
-      expect(
-        error,
-        isA<ErrorItem>()
-            .having((ErrorItem e) => e.code, 'Código', 'INVALID_AMOUNT')
-            .having(
-              (ErrorItem e) => e.description,
-              'Descripción',
-              'El monto debe ser mayor a 0.',
-            ),
-      );
-    });
+  test('addExpense captura error y lo reporta', () async {
+    const ErrorItem error =
+        ErrorItem(title: 'fail', description: 'logic', code: 'FAIL');
+    when(() => addExpense.execute(any()))
+        .thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
 
-    test('Debe retornar un error al registrar un egreso con monto 0 o negativo',
-        () {
-      final FinancialMovementModel invalidExpense = FinancialMovementModel(
-        id: '4',
-        amount: -10000, // -100 COP
-        date: DateTime.now(),
-        concept: 'Prueba',
-        category: 'Egreso',
-        createdAt: DateTime.now(),
-      );
+    final Either<ErrorItem, LedgerModel> result =
+        await bloc.addExpense(movement);
 
-      final Either<ErrorItem, List<FinancialMovementModel>> result =
-          ledger.addExpense(invalidExpense);
+    expect(result.isLeft, true);
+    expect(errorBloc.lastError.value?.code, 'FAIL');
+  });
 
-      expect(result.isLeft, true);
-      final ErrorItem? error =
-          result.when((ErrorItem error) => error, (_) => null);
+  test('canISpendIt retorna true', () {
+    when(() => canSpend.execute(any(), any())).thenReturn(true);
+    final bool result = bloc.canISpendIt(100);
+    expect(result, true);
+  });
 
-      expect(
-        error,
-        isA<ErrorItem>()
-            .having((ErrorItem e) => e.code, 'Código', 'INVALID_AMOUNT')
-            .having(
-              (ErrorItem e) => e.description,
-              'Descripción',
-              'El monto debe ser mayor a 0.',
-            ),
-      );
-    });
+  test('balance retorna el valor entregado por getBalance', () {
+    when(() => getBalance.execute(any())).thenReturn(1200);
+    final int result = bloc.balance;
+    expect(result, 1200);
+  });
 
-    test('Debe retornar un error al intentar gastar más de lo disponible', () {
-      final FinancialMovementModel expense = FinancialMovementModel(
-        id: '5',
-        amount: 50000, // 500 COP
-        date: DateTime.now(),
-        concept: 'Renta',
-        category: 'Egreso',
-        createdAt: DateTime.now(),
-      );
-
-      final Either<ErrorItem, List<FinancialMovementModel>> result =
-          ledger.addExpense(expense);
-
-      expect(result.isLeft, true);
-      final ErrorItem? error =
-          result.when((ErrorItem error) => error, (_) => null);
-
-      expect(
-        error,
-        isA<ErrorItem>()
-            .having((ErrorItem e) => e.code, 'Código', 'INSUFFICIENT_BALANCE')
-            .having(
-              (ErrorItem e) => e.description,
-              'Descripción',
-              'El egreso supera el saldo disponible.',
-            ),
-      );
-    });
-
-    test('Debe mostrar la información correctamente en toString()', () {
-      final FinancialMovementModel income = FinancialMovementModel(
-        id: '6',
-        amount: 30000, // 300 COP
-        date: DateTime.now(),
-        concept: 'Salario',
-        category: 'Ingreso',
-        createdAt: DateTime.now(),
-      );
-
-      ledger.addIncome(income);
-
-      expect(ledger.toString(), contains(r'✔ Ingresos: $300.00'));
-      expect(ledger.toString(), contains(r'💸 Gastos: $0.00'));
-      expect(ledger.toString(), contains(r'📒 Balance: $300.00'));
-    });
+  tearDown(() {
+    bloc.dispose();
+    errorBloc.dispose();
   });
 }
