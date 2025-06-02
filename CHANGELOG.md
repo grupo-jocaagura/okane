@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+## [1.7.0] - 2025-06-02
+
+### Added
+
+* Implemented the `ProjectorWidget` to enable responsive scaling based on Figma measurements.
+* Created `OkanePageBuilder` to unify responsive layout, loading indicators, error handling, and notifications.
+* Finalized `SplashScreenView` for app initialization logic including loading and navigation.
+* Completed the main view of the app using `MyHomeView`, now integrated with the app flow.
+
+### Changed
+
+* Enhanced `env.dart` to align with latest environment setup and page architecture.
+
 ## [1.6.0] - 2025-06-02
 
 ### Added
