@@ -6,8 +6,6 @@ import 'package:okane/blocs/bloc_user_ledger.dart';
 
 import '../mocks/mocks.dart';
 
-class FakeLedgerModel extends Fake implements LedgerModel {}
-
 void main() {
   late BlocUserLedger bloc;
   late BlocError errorBloc;
@@ -28,7 +26,7 @@ void main() {
   final FinancialMovementModel movement = defaultMovement;
   setUpAll(() {
     registerFallbackValue(defaultMovement);
-    registerFallbackValue(FakeLedgerModel());
+    registerFallbackValue(defaultOkaneLedger);
   });
 
   setUp(() {
