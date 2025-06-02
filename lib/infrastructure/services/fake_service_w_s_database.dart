@@ -1,12 +1,13 @@
 import 'package:jocaagura_domain/jocaagura_domain.dart';
 
+import '../../blocs/bloc_user_ledger.dart';
 import '../../domain/entities/services/service_w_s_database.dart';
+import '../../domain/gateway/ledger_ws_gateway.dart';
 
 /// Servicio WS simulado para pruebas en Okane.
 ///
 /// Soporta un único ledger por nombre bajo el path `okane/{ledger.nameOfLedger}`.
 class FakeServiceWSDatabase implements ServiceWSDatabase {
-  static const String _okanePrefix = 'okane/';
   static ErrorItem notFound(String path) => ErrorItem(
         title: 'Dato no encontrado',
         description: 'No existe ledger en $path',
@@ -20,14 +21,14 @@ class FakeServiceWSDatabase implements ServiceWSDatabase {
     ),
   );
 
-  Map<String, dynamic>? _ledgerJson;
+  Map<String, dynamic> _ledgerJson = defaultOkaneLedger.toJson();
 
   @override
   Future<Either<ErrorItem, void>> write(
     String path,
     Map<String, dynamic> data,
   ) async {
-    if (!path.startsWith(_okanePrefix)) {
+    if (!path.startsWith(LedgerWsGateway.ledgerPath)) {
       _ledgerStream.value = Left<ErrorItem, Map<String, dynamic>>(
         notFound(path),
       );
@@ -41,8 +42,8 @@ class FakeServiceWSDatabase implements ServiceWSDatabase {
 
   @override
   Future<Either<ErrorItem, Map<String, dynamic>>> read(String path) async {
-    if (path.startsWith(_okanePrefix) && _ledgerJson != null) {
-      return Right<ErrorItem, Map<String, dynamic>>(_ledgerJson!);
+    if (path.startsWith(LedgerWsGateway.ledgerPath)) {
+      return Right<ErrorItem, Map<String, dynamic>>(_ledgerJson);
     }
     return Left<ErrorItem, Map<String, dynamic>>(notFound(path));
   }
@@ -54,7 +55,7 @@ class FakeServiceWSDatabase implements ServiceWSDatabase {
 
   /// Limpia el estado simulado y reinicia el stream con error.
   void reset() {
-    _ledgerJson = null;
+    _ledgerJson = defaultOkaneLedger.toJson();
     _ledgerStream.value =
         Left<ErrorItem, Map<String, dynamic>>(notFound('okane/default'));
   }

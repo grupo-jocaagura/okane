@@ -12,9 +12,7 @@ class LedgerWsGatewayImpl implements LedgerWsGateway {
 
   @override
   Future<Either<ErrorItem, void>> saveLedger(Map<String, dynamic> ledger) {
-    final String path =
-        '${LedgerWsGateway.ledgerPath}/${ledger['nameOfLedger'] ?? "okane"}';
-    return _service.write(path, ledger);
+    return _service.write(LedgerWsGateway.ledgerPath, ledger);
   }
 
   @override
