@@ -17,6 +17,7 @@ import '../infrastructure/gateways/ledger_ws_gateway_impl.dart';
 import '../infrastructure/repositories/ledger_repository_impl.dart';
 import '../infrastructure/services/fake_service_w_s_database.dart';
 import '../ui/views/my_home_view.dart';
+import '../ui/views/splash_screen_view.dart';
 
 /// Define los entornos disponibles para la aplicación.
 ///
@@ -38,6 +39,13 @@ final BlocResponsive _blocResponsive = BlocResponsive();
 final BlocOnboarding _blocOnboarding = BlocOnboarding(
   <Future<void> Function()>[
     // reemplazar por las funciones iniciales de configuración
+
+    () async {
+      await Future<void>.delayed(
+        const Duration(seconds: 5),
+      );
+      _blocResponsive.showAppbar = false;
+    },
     () async {
       _blocNavigator.addPagesForDynamicLinksDirectory(<String, Widget>{
         MyHomeView.name: const MyHomeView(),
@@ -52,7 +60,7 @@ final BlocOnboarding _blocOnboarding = BlocOnboarding(
 );
 final BlocNavigator _blocNavigator = BlocNavigator(
   PageManager(),
-  OnBoardingPage(
+  SplashScreenView(
     blocOnboarding: _blocOnboarding,
   ),
 );
@@ -63,6 +71,15 @@ final LedgerWsGateway _ledgerWsGateway =
     LedgerWsGatewayImpl(_serviceWSDatabase);
 final LedgerRepository _ledgerRepository =
     LedgerRepositoryImpl(_ledgerWsGateway);
+final BlocUserLedger _blocUserLedger = BlocUserLedger(
+  addIncome: AddIncomeUseCase(_ledgerRepository),
+  addExpense: AddExpenseUseCase(_ledgerRepository),
+  getLedger: GetLedgerUseCase(_ledgerRepository),
+  listenLedger: ListenLedgerUseCase(_ledgerRepository),
+  canSpend: CanSpendUseCase(),
+  getBalance: GetBalanceUseCase(),
+  blocError: _blocError,
+);
 
 /// Generador de configuraciones para ambientes.
 ///
@@ -100,6 +117,7 @@ class Env {
             .showToast('${errorItem.title}:\n${errorItem.description}');
       }
     });
+
     switch (env) {
       case AppEnvironment.dev:
         return devAppConfig;
@@ -139,15 +157,7 @@ final AppConfig devAppConfig = AppConfig(
   blocOnboarding: _blocOnboarding,
   blocNavigator: _blocNavigator,
   blocModuleList: <String, BlocModule>{
-    BlocUserLedger.name: BlocUserLedger(
-      addIncome: AddIncomeUseCase(_ledgerRepository),
-      addExpense: AddExpenseUseCase(_ledgerRepository),
-      getLedger: GetLedgerUseCase(_ledgerRepository),
-      listenLedger: ListenLedgerUseCase(_ledgerRepository),
-      canSpend: CanSpendUseCase(),
-      getBalance: GetBalanceUseCase(),
-      blocError: _blocError,
-    ),
+    BlocUserLedger.name: _blocUserLedger,
     BlocError.name: _blocError,
   },
 );

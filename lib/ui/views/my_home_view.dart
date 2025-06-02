@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
+import '../../blocs/bloc_error_item.dart';
 import '../../blocs/bloc_user_ledger.dart';
 import '../../config.dart';
+import '../widgets/okane_page_builder.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
@@ -13,12 +16,16 @@ class MyHomeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final BlocUserLedger blocUserLedger =
         appManager.blocCore.getBlocModule<BlocUserLedger>(BlocUserLedger.name);
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Okane'),
-      ),
-      body: StreamBuilder<LedgerModel>(
+    context.appManager.mainMenu.addMainMenuOption(
+      onPressed: () {
+        debugPrint('Test me');
+      },
+      label: 'Inicializando',
+      iconData: Icons.check,
+    );
+
+    return OkanePageBuilder(
+      page: StreamBuilder<LedgerModel>(
         stream: blocUserLedger.ledgerModelStream,
         builder: (_, __) {
           final LedgerModel ledger = blocUserLedger.userLedger;
@@ -75,6 +82,21 @@ class MyHomeView extends StatelessWidget {
                     label: const Text('Agregar Gasto'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  final BlocError blocError = appManager.blocCore
+                      .getBlocModule<BlocError>(BlocError.name);
+
+                  blocError.report(
+                    defaultErrorItem.copyWith(
+                      errorLevel: ErrorLevelEnum.warning,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.remove),
+                label: const Text('Test toast warning'),
               ),
             ],
           );
