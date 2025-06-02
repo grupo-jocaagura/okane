@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+[1.5.0] - 2025-06-01
+
+Added
+
+Introduced BlocErrorItem to handle structured error management within the application.
+
+Added unit tests for BlocErrorItem and improved coverage for BlocUserLedger.
+
+Integrated use cases for financial operations: add_income_use_case, add_expense_usecase, get_balance_usecase, can_spend_usecase, get_ledger_usecase, and listen_ledger_usecase.
+
+Added LedgerWsGateway for websocket communication.
+
+Created LedgerRepository to abstract data access logic from services.
+
+Added mock implementations of all use cases to facilitate isolated testing.
+
+Integrated mocktail as a testing dependency in pubspec.yaml.
+
+Changed
+
+Refactored BlocUserLedger to align with new domain logic and error handling practices.
+
+Updated pubspec.yaml to include latest versions and mocktail dependency.
+
 ## [1.2.0] - 2025-03-16
 
 ### Added

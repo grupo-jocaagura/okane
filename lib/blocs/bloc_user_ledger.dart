@@ -1,147 +1,115 @@
 import 'package:jocaagura_domain/jocaagura_domain.dart';
 
-import '../domain/error_item.dart';
-import '../utils/money_utils.dart';
+import '../domain/usecases/add_expense_usecase.dart';
+import '../domain/usecases/add_income_use_case.dart';
+import '../domain/usecases/can_spend_usecase.dart';
+import '../domain/usecases/get_balance_usecase.dart';
+import '../domain/usecases/get_ledger_usecase.dart';
+import '../domain/usecases/listen_ledger_usecase.dart';
+import 'bloc_error_item.dart';
 
-/// `BlocUserLedger` gestiona los ingresos y egresos financieros del usuario.
+const LedgerModel defaultOkaneLedger = LedgerModel(
+  nameOfLedger: 'defaultOkane',
+  incomeLedger: <FinancialMovementModel>[],
+  expenseLedger: <FinancialMovementModel>[],
+);
+
+/// `BlocUserLedger` expone el estado del `LedgerModel` del usuario y orquesta los casos de uso.
 ///
-/// Esta clase extiende `BlocModule` y encapsula la lógica para manejar registros
-/// de movimientos financieros, permitiendo agregar ingresos y gastos,
-/// calcular el balance y verificar si hay suficiente saldo para gastar.
-///
-/// ## Propiedades:
-/// - `incomeLedger`: Administra la lista de ingresos.
-/// - `expenseLedger`: Administra la lista de egresos.
-/// - `sumIncomeLedger`: Retorna la suma total de ingresos.
-/// - `sumExpenseLedger`: Retorna la suma total de egresos.
-/// - `balance`: Calcula el balance restando egresos de ingresos.
-/// - `canISpendIt(int amount)`: Indica si hay suficiente saldo para un gasto.
-///
-/// ## Métodos:
-/// - `addIncome(FinancialMovementModel movement)`: Agrega un ingreso.
-/// - `addExpense(FinancialMovementModel movement)`: Agrega un gasto.
-/// - `dispose()`: Libera los recursos de los BLoCs.
-///
-/// ### Ejemplo de uso:
-/// ```dart
-/// void main() {
-///   final ledger = BlocUserLedger();
-///
-///   final income = FinancialMovementModel(amount: 5000, description: 'Salario');
-///   final expense = FinancialMovementModel(amount: 2000, description: 'Alquiler');
-///
-///   ledger.addIncome(income);
-///   ledger.addExpense(expense);
-///
-///   print('Balance actual: ${ledger.balance}'); // 3000
-///
-///   if (ledger.canISpendIt(1000)) {
-///     print('Puedes gastar 1000');
-///   } else {
-///     print('No tienes suficiente saldo');
-///   }
-///
-///   ledger.dispose();
-/// }
-/// ```
+/// Este BLoC no contiene lógica de negocio; se limita a coordinar las acciones del usuario,
+/// gestionar el estado reactivo y exponer errores de operación.
 class BlocUserLedger extends BlocModule {
-  /// Lista de ingresos registrados.
-  final BlocGeneral<List<FinancialMovementModel>> incomeLedger =
-      BlocGeneral<List<FinancialMovementModel>>(<FinancialMovementModel>[]);
+  /// Crea una instancia del Bloc con todos sus casos de uso.
+  BlocUserLedger({
+    required AddIncomeUseCase addIncome,
+    required AddExpenseUseCase addExpense,
+    required GetLedgerUseCase getLedger,
+    required ListenLedgerUseCase listenLedger,
+    required CanSpendUseCase canSpend,
+    required GetBalanceUseCase getBalance,
+    required BlocError blocError,
+  })  : _addIncome = addIncome,
+        _addExpense = addExpense,
+        _getLedger = getLedger,
+        _listenLedger = listenLedger,
+        _canSpend = canSpend,
+        _blocError = blocError,
+        _getBalance = getBalance;
+  final BlocGeneral<LedgerModel> userLedger =
+      BlocGeneral<LedgerModel>(defaultOkaneLedger);
 
-  /// Lista de egresos registrados.
-  final BlocGeneral<List<FinancialMovementModel>> expenseLedger =
-      BlocGeneral<List<FinancialMovementModel>>(<FinancialMovementModel>[]);
+  final AddIncomeUseCase _addIncome;
+  final AddExpenseUseCase _addExpense;
+  final GetLedgerUseCase _getLedger;
+  final ListenLedgerUseCase _listenLedger;
+  final CanSpendUseCase _canSpend;
+  final GetBalanceUseCase _getBalance;
+  final BlocError _blocError;
 
-  /// Retorna la suma total de los ingresos.
-  int get sumIncomeLedger => MoneyUtils.sumFromLedger(incomeLedger.value);
+  /// Inicializa el ledger con los datos remotos y comienza a escuchar cambios.
+  Future<void> initialize() async {
+    final Either<ErrorItem, LedgerModel> result = await _getLedger.execute();
+    result.when(
+      (ErrorItem error) => _blocError.report(error),
+      (LedgerModel ledger) => userLedger.value = ledger,
+    );
 
-  /// Retorna la suma total de los egresos.
-  int get sumExpenseLedger => MoneyUtils.sumFromLedger(expenseLedger.value);
+    _listenLedger.execute().listen((Either<ErrorItem, LedgerModel> event) {
+      event.when(
+        (ErrorItem error) =>
+            _blocError.report(error), // manejar error si es necesario
+        (LedgerModel remoteLedger) => userLedger.value = remoteLedger,
+      );
+    });
+  }
 
-  /// Calcula el balance general como ingresos menos egresos.
-  int get balance => sumIncomeLedger - sumExpenseLedger;
-
-  /// Verifica si se puede gastar una cantidad específica sin quedar en saldo negativo.
-  bool canISpendIt(int amount) => balance >= amount;
-
-  /// Agrega un ingreso al ledger de ingresos.
-  ///
-  /// Retorna un `Right` con la lista actualizada si el monto es válido,
-  /// de lo contrario, devuelve un `Left` con un `ErrorItem`.
-  Either<ErrorItem, List<FinancialMovementModel>> addIncome(
+  /// Agrega un ingreso al ledger del usuario y sincroniza con el backend.
+  Future<Either<ErrorItem, LedgerModel>> addIncome(
     FinancialMovementModel movement,
-  ) {
-    if (movement.amount <= 0) {
-      return Left<ErrorItem, List<FinancialMovementModel>>(
-        ErrorItem(
-          title: 'Monto inválido',
-          code: 'INVALID_AMOUNT',
-          description: 'El monto debe ser mayor a 0.',
-          meta: <String, dynamic>{'amount': movement.amount},
-        ),
-      );
-    }
-
-    final List<FinancialMovementModel> updatedLedger =
-        List<FinancialMovementModel>.from(incomeLedger.value)..add(movement);
-
-    incomeLedger.value = updatedLedger;
-    return Right<ErrorItem, List<FinancialMovementModel>>(updatedLedger);
+  ) async {
+    final Either<ErrorItem, LedgerModel> result =
+        await _addIncome.execute(movement);
+    result.when(
+      (ErrorItem error) => _blocError.report(error),
+      (LedgerModel ledger) => userLedger.value = ledger,
+    );
+    return result;
   }
 
-  /// Agrega un gasto al ledger de egresos.
-  ///
-  /// Retorna un `Right` con la lista actualizada si el monto es válido y hay saldo suficiente.
-  /// En caso contrario, devuelve un `Left` con un `ErrorItem`.
-  Either<ErrorItem, List<FinancialMovementModel>> addExpense(
+  /// Agrega un egreso si hay saldo suficiente y actualiza el ledger.
+  Future<Either<ErrorItem, LedgerModel>> addExpense(
     FinancialMovementModel movement,
-  ) {
-    if (movement.amount <= 0) {
-      return Left<ErrorItem, List<FinancialMovementModel>>(
-        ErrorItem(
-          title: 'Monto inválido',
-          code: 'INVALID_AMOUNT',
-          description: 'El monto debe ser mayor a 0.',
-          meta: <String, dynamic>{'amount': movement.amount},
-        ),
-      );
-    }
-    if (!canISpendIt(movement.amount)) {
-      return Left<ErrorItem, List<FinancialMovementModel>>(
-        ErrorItem(
-          title: 'Saldo insuficiente',
-          code: 'INSUFFICIENT_BALANCE',
-          description: 'El egreso supera el saldo disponible.',
-          meta: <String, dynamic>{
-            'amount': movement.amount,
-            'balance': balance,
-          },
-        ),
-      );
-    }
-
-    final List<FinancialMovementModel> updatedLedger =
-        List<FinancialMovementModel>.from(expenseLedger.value)..add(movement);
-
-    expenseLedger.value = updatedLedger;
-    return Right<ErrorItem, List<FinancialMovementModel>>(updatedLedger);
+  ) async {
+    final Either<ErrorItem, LedgerModel> result =
+        await _addExpense.execute(movement);
+    result.when(
+      (ErrorItem error) => _blocError.report(error),
+      (LedgerModel ledger) => userLedger.value = ledger,
+    );
+    return result;
   }
 
-  /// Libera los recursos asociados a los BLoCs de ingresos y egresos.
-  @override
-  void dispose() {
-    incomeLedger.dispose();
-    expenseLedger.dispose();
+  /// Retorna `true` si el usuario puede gastar el monto indicado.
+  bool canISpendIt(int amount) {
+    return _canSpend.execute(userLedger.value, amount);
   }
 
-  /// Retorna una representación en texto del estado actual del ledger.
+  /// Balance total del usuario.
+  int get balance => _getBalance.execute(userLedger.value);
+
+  /// Representación en texto del estado del ledger.
   @override
   String toString() {
     return '''
-✔ Ingresos: ${MoneyUtils.toCop(sumIncomeLedger)}
-💸 Gastos: ${MoneyUtils.toCop(sumExpenseLedger)}
-📒 Balance: ${MoneyUtils.toCop(balance)}
+✔ Ingresos: ${MoneyUtils.totalAmount(userLedger.value.incomeLedger)}
+💸 Gastos: ${MoneyUtils.totalAmount(userLedger.value.expenseLedger)}
+📒 Balance: $balance
 ''';
+  }
+
+  /// Libera los recursos del Bloc.
+  @override
+  void dispose() {
+    userLedger.dispose();
   }
 }
