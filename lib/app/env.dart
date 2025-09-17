@@ -38,8 +38,6 @@ final BlocSecondaryMenuDrawer _blocSecondaryMenuDrawer =
 final BlocResponsive _blocResponsive = BlocResponsive();
 final BlocOnboarding _blocOnboarding = BlocOnboarding(
   <Future<void> Function()>[
-    // reemplazar por las funciones iniciales de configuración
-
     () async {
       await Future<void>.delayed(
         const Duration(seconds: 5),
