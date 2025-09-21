@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../domain/errors/financial_error_items.dart';
 import '../../domain/gateway/ledger_ws_gateway.dart';
@@ -15,8 +15,8 @@ class LedgerRepositoryImpl implements LedgerRepository {
   Future<Either<ErrorItem, LedgerModel>> addIncome(
     FinancialMovementModel movement,
   ) async {
-    final Either<ErrorItem, Map<String, dynamic>> readResult =
-        await _gateway.fetchLedger();
+    final Either<ErrorItem, Map<String, dynamic>> readResult = await _gateway
+        .fetchLedger();
     return readResult.when(
       (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
       (Map<String, dynamic> json) {
@@ -32,8 +32,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
               List<FinancialMovementModel>.from(current.incomeLedger)
                 ..add(movement);
 
-          final LedgerModel updated =
-              current.copyWith(incomeLedger: updatedIncome);
+          final LedgerModel updated = current.copyWith(
+            incomeLedger: updatedIncome,
+          );
           return _saveAndReturn(updated);
         } catch (_) {
           return Left<ErrorItem, LedgerModel>(
@@ -48,14 +49,15 @@ class LedgerRepositoryImpl implements LedgerRepository {
   Future<Either<ErrorItem, LedgerModel>> addExpense(
     FinancialMovementModel movement,
   ) async {
-    final Either<ErrorItem, Map<String, dynamic>> readResult =
-        await _gateway.fetchLedger();
+    final Either<ErrorItem, Map<String, dynamic>> readResult = await _gateway
+        .fetchLedger();
     return readResult.when(
       (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
       (Map<String, dynamic> json) {
         try {
           final LedgerModel current = LedgerModel.fromJson(json);
-          final int balance = MoneyUtils.totalAmount(current.incomeLedger) -
+          final int balance =
+              MoneyUtils.totalAmount(current.incomeLedger) -
               MoneyUtils.totalAmount(current.expenseLedger);
 
           if (movement.amount <= 0) {
@@ -74,8 +76,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
               List<FinancialMovementModel>.from(current.expenseLedger)
                 ..add(movement);
 
-          final LedgerModel updated =
-              current.copyWith(expenseLedger: updatedExpenses);
+          final LedgerModel updated = current.copyWith(
+            expenseLedger: updatedExpenses,
+          );
           return _saveAndReturn(updated);
         } catch (_) {
           return Left<ErrorItem, LedgerModel>(
@@ -88,8 +91,8 @@ class LedgerRepositoryImpl implements LedgerRepository {
 
   @override
   Future<Either<ErrorItem, LedgerModel>> getLedger() async {
-    final Either<ErrorItem, Map<String, dynamic>> result =
-        await _gateway.fetchLedger();
+    final Either<ErrorItem, Map<String, dynamic>> result = await _gateway
+        .fetchLedger();
     return result.when(
       (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
       (Map<String, dynamic> json) {
@@ -106,9 +109,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
 
   @override
   Stream<Either<ErrorItem, LedgerModel>> subscribeToLedgerChanges() {
-    return _gateway
-        .onLedgerUpdated()
-        .map((Either<ErrorItem, Map<String, dynamic>> event) {
+    return _gateway.onLedgerUpdated().map((
+      Either<ErrorItem, Map<String, dynamic>> event,
+    ) {
       return event.when(
         (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
         (Map<String, dynamic> json) {
@@ -127,8 +130,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
   Future<Either<ErrorItem, LedgerModel>> _saveAndReturn(
     LedgerModel updated,
   ) async {
-    final Either<ErrorItem, void> saveResult =
-        await _gateway.saveLedger(updated.toJson());
+    final Either<ErrorItem, void> saveResult = await _gateway.saveLedger(
+      updated.toJson(),
+    );
     return saveResult.when(
       (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
       (_) => Right<ErrorItem, LedgerModel>(updated),

@@ -1,28 +1,37 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:jocaaguraarchetype/ui/jocaagura_app.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import 'config.dart';
-import 'ui/theme/global_theme.dart';
+import 'ui/views/splash_screen_view.dart';
+import 'ui/views/views.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
     final String license = await rootBundle.loadString('google_fonts/OFL.txt');
     yield LicenseEntryWithLineBreaks(<String>['google-fonts'], license);
   });
-  WidgetsFlutterBinding.ensureInitialized();
-  final Brightness brightness =
-      WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
-  final bool isDarkMode = brightness == Brightness.dark;
-  appManager.theme.customThemeFromColorScheme(
-    isDarkMode ? darkColorScheme : lightColorScheme,
-    GoogleFonts.robotoTextTheme(),
-    isDarkMode,
-  );
+  // appManager.theme.customThemeFromColorScheme(
+  //   isDarkMode ? darkColorScheme : lightColorScheme,
+  //   GoogleFonts.robotoTextTheme(),
+  //   isDarkMode,
+  // );
+
   runApp(
-    JocaaguraApp(appManager: appManager),
+    JocaaguraApp(
+      appManager: appManager,
+      registry: pageRegistry,
+      initialLocation: SplashScreenView.pageModel.toUriString(),
+    ),
   );
+}
+
+extension PageManagerDebugX on PageManager {
+  void debugLogStack([String tag = '']) {
+    final String chain = stack.pages.map((PageModel p) => p.name).join(' > ');
+    debugPrint('[STACK$tag] $chain');
+  }
 }

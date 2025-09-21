@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 /// Interfaz para servicios de base de datos en tiempo real vía WebSocket.
 ///

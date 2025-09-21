@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:jocaaguraarchetype/ui/pages/loading_page.dart';
-import 'package:jocaaguraarchetype/ui/widgets/my_snack_bar_widget.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../config.dart';
 import 'projector_widget.dart';
@@ -16,8 +15,9 @@ class OkanePageBuilder extends StatelessWidget {
       builder: (_, __) {
         final bool isLoading = appManager.loading.loadingMsg.isNotEmpty;
         return Scaffold(
+          backgroundColor: Colors.white,
           appBar: appManager.responsive.showAppbar
-              ? AppBar(title: Text(appManager.navigator.title))
+              ? AppBar(title: Text(appManager.pageManager.currentTitle))
               : null,
           body: Stack(
             children: <Widget>[
@@ -29,11 +29,9 @@ class OkanePageBuilder extends StatelessWidget {
                 bottom: 0,
                 left: 0,
                 right: 0,
-                child: MySnackBarWidget(
-                  toastStream: appManager.blocUserNotifications.toastStream,
-                  width: appManager.responsive.size.width,
-                  gutterWidth: appManager.responsive.gutterWidth,
-                  marginWidth: appManager.responsive.marginWidth,
+                child: MySnackBarWidget.fromStringStream(
+                  responsive: context.appManager.responsive,
+                  toastStream: context.appManager.notifications.textStream,
                 ),
               ),
             ],

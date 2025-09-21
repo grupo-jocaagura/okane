@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../domain/entities/services/service_w_s_database.dart';
 import '../../domain/gateway/ledger_ws_gateway.dart';

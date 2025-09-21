@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:jocaagura_domain/jocaagura_domain.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../blocs/bloc_error_item.dart';
@@ -16,52 +14,13 @@ import '../domain/usecases/listen_ledger_usecase.dart';
 import '../infrastructure/gateways/ledger_ws_gateway_impl.dart';
 import '../infrastructure/repositories/ledger_repository_impl.dart';
 import '../infrastructure/services/fake_service_w_s_database.dart';
-import '../ui/views/my_home_view.dart';
-import '../ui/views/splash_screen_view.dart';
+import '../ui/views/views.dart';
 
 /// Define los entornos disponibles para la aplicación.
 ///
 /// Se utiliza en la clase [Env] para construir un [AppConfig] personalizado
 /// de acuerdo al entorno activo (`dev`, `qa`, `prod`).
 enum AppEnvironment { dev, qa, prod }
-
-final BlocTheme _blocTheme = BlocTheme(
-  const ProviderTheme(
-    ServiceTheme(),
-  ),
-);
-final BlocUserNotifications _blocUserNotifications = BlocUserNotifications();
-final BlocLoading _blocLoading = BlocLoading();
-final BlocMainMenuDrawer _blocMainMenuDrawer = BlocMainMenuDrawer();
-final BlocSecondaryMenuDrawer _blocSecondaryMenuDrawer =
-    BlocSecondaryMenuDrawer();
-final BlocResponsive _blocResponsive = BlocResponsive();
-final BlocOnboarding _blocOnboarding = BlocOnboarding(
-  <Future<void> Function()>[
-    () async {
-      await Future<void>.delayed(
-        const Duration(seconds: 5),
-      );
-      _blocResponsive.showAppbar = false;
-    },
-    () async {
-      _blocNavigator.addPagesForDynamicLinksDirectory(<String, Widget>{
-        MyHomeView.name: const MyHomeView(),
-      });
-    },
-    () async {
-      _blocNavigator.setHomePageAndUpdate(
-        const MyHomeView(),
-      );
-    },
-  ],
-);
-final BlocNavigator _blocNavigator = BlocNavigator(
-  PageManager(),
-  SplashScreenView(
-    blocOnboarding: _blocOnboarding,
-  ),
-);
 
 final BlocError _blocError = BlocError();
 final ServiceWSDatabase _serviceWSDatabase = FakeServiceWSDatabase();
@@ -104,18 +63,6 @@ class Env {
   /// Actualmente todos los entornos apuntan a [devAppConfig], pero pueden
   /// extenderse fácilmente para producción o pruebas.
   static AppConfig build(AppEnvironment env) {
-    _blocError.lastError.addFunctionToProcessTValueOnStream('notify_to_user',
-        (ErrorItem? errorItem) {
-      if (errorItem?.errorLevel == ErrorLevelEnum.systemInfo) {
-        debugPrint('$ErrorItem');
-      }
-      if (errorItem?.errorLevel != ErrorLevelEnum.systemInfo &&
-          errorItem != null) {
-        _blocUserNotifications
-            .showToast('${errorItem.title}:\n${errorItem.description}');
-      }
-    });
-
     switch (env) {
       case AppEnvironment.dev:
         return devAppConfig;
@@ -146,16 +93,20 @@ class Env {
 /// - Mantiene la arquitectura desacoplada.
 /// - Es fácilmente escalable para otros entornos.
 final AppConfig devAppConfig = AppConfig(
-  blocTheme: _blocTheme,
-  blocUserNotifications: _blocUserNotifications,
-  blocLoading: _blocLoading,
-  blocMainMenuDrawer: _blocMainMenuDrawer,
-  blocSecondaryMenuDrawer: _blocSecondaryMenuDrawer,
-  blocResponsive: _blocResponsive,
-  blocOnboarding: _blocOnboarding,
-  blocNavigator: _blocNavigator,
+  blocTheme: BlocTheme(
+    themeUsecases: ThemeUsecases.fromRepo(
+      RepositoryThemeImpl(gateway: GatewayThemeImpl()),
+    ),
+  ),
+  blocUserNotifications: BlocUserNotifications(),
+  blocLoading: BlocLoading(),
+  blocMainMenuDrawer: BlocMainMenuDrawer(),
+  blocSecondaryMenuDrawer: BlocSecondaryMenuDrawer(),
+  blocResponsive: BlocResponsive(),
+  blocOnboarding: BlocOnboarding(),
   blocModuleList: <String, BlocModule>{
     BlocUserLedger.name: _blocUserLedger,
     BlocError.name: _blocError,
   },
+  pageManager: PageManager(initial: navStackModel),
 );

@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../domain/usecases/add_expense_usecase.dart';
 import '../domain/usecases/add_income_use_case.dart';
@@ -28,15 +28,16 @@ class BlocUserLedger extends BlocModule {
     required CanSpendUseCase canSpend,
     required GetBalanceUseCase getBalance,
     required BlocError blocError,
-  })  : _addIncome = addIncome,
-        _addExpense = addExpense,
-        _getLedger = getLedger,
-        _listenLedger = listenLedger,
-        _canSpend = canSpend,
-        _blocError = blocError,
-        _getBalance = getBalance;
-  final BlocGeneral<LedgerModel> _userLedger =
-      BlocGeneral<LedgerModel>(defaultOkaneLedger);
+  }) : _addIncome = addIncome,
+       _addExpense = addExpense,
+       _getLedger = getLedger,
+       _listenLedger = listenLedger,
+       _canSpend = canSpend,
+       _blocError = blocError,
+       _getBalance = getBalance;
+  final BlocGeneral<LedgerModel> _userLedger = BlocGeneral<LedgerModel>(
+    defaultOkaneLedger,
+  );
   static const String name = 'blocUserLedger';
   final AddIncomeUseCase _addIncome;
   final AddExpenseUseCase _addExpense;
@@ -70,8 +71,9 @@ class BlocUserLedger extends BlocModule {
   Future<Either<ErrorItem, LedgerModel>> addIncome(
     FinancialMovementModel movement,
   ) async {
-    final Either<ErrorItem, LedgerModel> result =
-        await _addIncome.execute(movement);
+    final Either<ErrorItem, LedgerModel> result = await _addIncome.execute(
+      movement,
+    );
     result.when(
       (ErrorItem error) {
         _blocError.report(error);
@@ -87,8 +89,9 @@ class BlocUserLedger extends BlocModule {
   Future<Either<ErrorItem, LedgerModel>> addExpense(
     FinancialMovementModel movement,
   ) async {
-    final Either<ErrorItem, LedgerModel> result =
-        await _addExpense.execute(movement);
+    final Either<ErrorItem, LedgerModel> result = await _addExpense.execute(
+      movement,
+    );
     result.when(
       (ErrorItem error) => _blocError.report(error),
       (LedgerModel ledger) => _userLedger.value = ledger,

@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../entities/usecase.dart';
 
@@ -7,7 +7,8 @@ import '../entities/usecase.dart';
 /// Este caso de uso trabaja localmente sobre una instancia del modelo.
 class CanSpendUseCase implements Usecase {
   bool execute(LedgerModel ledger, int amount) {
-    final int balance = MoneyUtils.totalAmount(ledger.incomeLedger) -
+    final int balance =
+        MoneyUtils.totalAmount(ledger.incomeLedger) -
         MoneyUtils.totalAmount(ledger.expenseLedger);
     return balance >= amount;
   }
