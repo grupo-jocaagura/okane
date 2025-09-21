@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:text_responsive/text_responsive.dart';
 
+import '../ui_constants.dart';
 import 'icon_widget.dart';
-import 'subtitle_widget.dart';
-import 'title_widget.dart';
 
 class SquareButtonWidget extends StatelessWidget {
   const SquareButtonWidget({
@@ -22,7 +22,7 @@ class SquareButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double iconSideLength = sideLength * (5 / 18);
+    final double iconSideLength = sideLength * (4 / 18);
 
     return InkWell(
       onTap: ontap,
@@ -43,8 +43,15 @@ class SquareButtonWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   const SizedBox(height: 30.0),
-                  TitleWidget(title: title),
-                  SubtitleWidget(subtitle: subtitle),
+                  InlineTextWidget(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  smallSeparatorHeightWidget,
+                  InlineTextWidget(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),

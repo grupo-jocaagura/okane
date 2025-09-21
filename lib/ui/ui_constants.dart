@@ -16,8 +16,12 @@ const String kSaveIncomeSuccessMessage = 'Ingreso registrado';
 const String kSaveExpenseSuccessMessage = 'Gasto registrado';
 
 const double kDefaultHeightSeparator = 16.0;
+const double kSmallHeightSeparator = 6.0;
 const SizedBox defaultSeparatorHeightWidget = SizedBox(
   height: kDefaultHeightSeparator,
+);
+const SizedBox smallSeparatorHeightWidget = SizedBox(
+  height: kSmallHeightSeparator,
 );
 const EdgeInsets kInnerViewPadding = EdgeInsets.symmetric(horizontal: 16.0);
 const double kInitialTopMargin = 79.0;
