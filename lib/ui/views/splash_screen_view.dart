@@ -57,15 +57,20 @@ class _SplashScreenViewState extends State<SplashScreenView> {
       if (_navigated) {
         return;
       }
-      if ((s.status == OnboardingStatus.completed ||
-              s.status == OnboardingStatus.skipped) &&
-          context.mounted) {
+      if (s.status == OnboardingStatus.completed ||
+          s.status == OnboardingStatus.skipped) {
         _navigated = true;
-        context.appManager.pageManager.debugLogStack(' BEFORE NAV');
-        context.appManager.replaceTopModel(MyHomeView.pageModel);
-        context.appManager.pageManager.debugLogStack('  AFTER NAV');
+        navigate();
       }
     });
+  }
+
+  void navigate() {
+    if (context.mounted) {
+      context.appManager.pageManager.debugLogStack(' BEFORE NAV');
+      context.appManager.replaceTopModel(MyHomeView.pageModel);
+      context.appManager.pageManager.debugLogStack('  AFTER NAV');
+    }
   }
 
   @override
@@ -116,8 +121,8 @@ class _SplashScreenViewState extends State<SplashScreenView> {
                         s.error?.title ?? 'Error',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -150,8 +155,9 @@ class _SplashScreenViewState extends State<SplashScreenView> {
   static String _formatRunningLine(OnboardingState s, OnboardingStep? step) {
     final int current = (s.stepIndex >= 0 ? s.stepIndex : 0) + 1;
     final int total = (s.totalSteps > 0 ? s.totalSteps : 1);
-    final String title =
-        (step?.title.isNotEmpty ?? false) ? step!.title : 'Cargando…';
+    final String title = (step?.title.isNotEmpty ?? false)
+        ? step!.title
+        : 'Cargando…';
     return '$current/$total · $title';
   }
 }

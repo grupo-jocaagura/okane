@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
-import '../../blocs/bloc_error_item.dart';
 import '../../blocs/bloc_user_ledger.dart';
 import '../../config.dart';
+import '../utils/okane_formatter.dart';
+import '../widgets/balance_widget.dart';
+import '../widgets/circle_avatar_widget.dart';
 import '../widgets/okane_page_builder.dart';
 import '../widgets/projector_widget.dart';
+import '../widgets/square_button_widget.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
@@ -39,67 +42,48 @@ class MyHomeView extends StatelessWidget {
           final int balance = ingresos - egresos;
           return ProjectorWidget(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Text('✔ Ingresos: $ingresos'),
-                Text('💸 Egresos: $egresos'),
-                Text('📒 Balance: $balance'),
-                const Text('You have pushed the button this many times:'),
-                const SizedBox(height: 24),
+                const SizedBox(height: 166.0),
+                const CircleAvatarWidget(),
+                const SizedBox(height: 16),
+                const BalanceWidget(),
+                const SizedBox(height: 65),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        blocUserLedger.addIncome(
-                          FinancialMovementModel(
-                            id: DateTime.now().toIso8601String(),
-                            amount: 1000,
-                            concept: 'Ingreso aleatorio',
-                            category: 'Salary',
-                            date: DateTime.now(),
-                            createdAt: DateTime.now(),
-                            detailedDescription: 'Ingreso generado',
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add),
-                      label: const Text('Agregar Ingreso'),
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <SquareButtonWidget>[
+                    SquareButtonWidget(
+                      quarterTurns: 1,
+                      title: 'Ingresos',
+                      subtitle: OkaneFormatter.moneyFormatter(
+                        ingresos.toDouble(),
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        blocUserLedger.addExpense(
-                          FinancialMovementModel(
-                            id: DateTime.now().toIso8601String(),
-                            amount: 500,
-                            concept: 'Gasto aleatorio',
-                            category: 'Food',
-                            date: DateTime.now(),
-                            createdAt: DateTime.now(),
-                            detailedDescription: 'Egreso generado',
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.remove),
-                      label: const Text('Agregar Gasto'),
+                    SquareButtonWidget(
+                      quarterTurns: 3,
+                      title: 'Gastos',
+                      subtitle: OkaneFormatter.moneyFormatter(
+                        egresos.toDouble(),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    final BlocError blocError = appManager
-                        .requireModuleByKey<BlocError>(BlocError.name);
-
-                    blocError.report(
-                      defaultErrorItem.copyWith(
-                        errorLevel: ErrorLevelEnum.warning,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <SquareButtonWidget>[
+                    SquareButtonWidget(
+                      quarterTurns: 4,
+                      title: 'Movimientos',
+                      subtitle: OkaneFormatter.moneyFormatter(
+                        balance.toDouble(),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.remove),
-                  label: const Text('Test toast warning'),
+                    ),
+                    const SquareButtonWidget(
+                      quarterTurns: 2,
+                      title: 'Informes',
+                      subtitle: 'Subhead',
+                    ),
+                  ],
                 ),
               ],
             ),
