@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
+import 'package:text_responsive/text_responsive.dart';
 
 import '../../blocs/bloc_user_ledger.dart';
 import '../ui_constants.dart';
@@ -33,7 +34,27 @@ class MovementsView extends StatelessWidget {
           ),
           defaultSeparatorHeightWidget,
           Expanded(child: ListOfMovementsWidget(ledgerModel: bloc.userLedger)),
-          Container(width: 312, height: 48, color: Colors.brown),
+          SizedBox(
+            width: 312,
+            height: 48,
+            child: Column(
+              children: <Widget>[
+                Icon(
+                  Icons.change_history,
+                  color: Theme.of(context).colorScheme.inversePrimary,
+                ),
+                InlineTextWidget(
+                  'home',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+                Container(
+                  width: 50.0,
+                  height: 2.0,
+                  color: Theme.of(context).colorScheme.inversePrimary,
+                ),
+              ],
+            ),
+          ),
           smallSeparatorHeightWidget,
         ],
       ),

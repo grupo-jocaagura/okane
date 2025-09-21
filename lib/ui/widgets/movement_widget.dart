@@ -39,7 +39,9 @@ class MovementWidget extends StatelessWidget {
                       width: 18.0,
                       height: 18.0,
                       decoration: BoxDecoration(
-                        color: isIncome ? Colors.deepOrange : Colors.brown,
+                        color: isIncome
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.error,
                         borderRadius: BorderRadius.circular(2.5),
                       ),
                     ),

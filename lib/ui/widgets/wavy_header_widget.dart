@@ -23,7 +23,7 @@ class WavyHeaderWidget extends StatelessWidget {
                 width: 600,
                 height: 600,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
+                  color: Theme.of(context).colorScheme.inversePrimary,
                   borderRadius: BorderRadius.circular(40),
                 ),
               ),

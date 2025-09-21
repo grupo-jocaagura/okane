@@ -22,7 +22,6 @@ class OkanePageBuilder extends StatelessWidget {
         final bool isLoading = appManager.loading.loadingMsg.isNotEmpty;
         return SafeArea(
           child: Scaffold(
-            backgroundColor: Colors.white,
             appBar: AppBar(
               title: Text(appManager.pageManager.currentTitle),
               backgroundColor: Colors.transparent,

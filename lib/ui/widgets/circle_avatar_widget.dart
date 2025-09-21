@@ -7,7 +7,7 @@ class CircleAvatarWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return CircleAvatar(
       radius: 55.0,
-      backgroundColor: Theme.of(context).primaryColor,
+      backgroundColor: Theme.of(context).colorScheme.surfaceTint,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(55),
         child: Icon(
