@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'okane_scaffold_widget.dart';
-
 class ProjectorWidget extends StatelessWidget {
   const ProjectorWidget({
     required this.child,
@@ -47,7 +45,7 @@ class ProjectorWidget extends StatelessWidget {
                     : SizedBox(
                         width: designWidth,
                         height: designHeight,
-                        child: OkaneScaffoldWidget(child: child),
+                        child: child,
                       ),
               ),
             ),

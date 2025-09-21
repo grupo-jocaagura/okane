@@ -3,12 +3,14 @@ import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../blocs/bloc_user_ledger.dart';
 import '../../config.dart';
+import '../ui_constants.dart';
 import '../utils/okane_formatter.dart';
 import '../widgets/balance_widget.dart';
 import '../widgets/circle_avatar_widget.dart';
 import '../widgets/okane_page_builder.dart';
 import '../widgets/projector_widget.dart';
 import '../widgets/square_button_widget.dart';
+import 'income_view.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
@@ -52,8 +54,11 @@ class MyHomeView extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: <SquareButtonWidget>[
                     SquareButtonWidget(
+                      ontap: () => context.appManager.pageManager.push(
+                        IncomeView.pageModel,
+                      ),
                       quarterTurns: 1,
-                      title: 'Ingresos',
+                      title: kIncomes,
                       subtitle: OkaneFormatter.moneyFormatter(
                         ingresos.toDouble(),
                       ),

@@ -1,5 +1,6 @@
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
+import 'income_view.dart';
 import 'my_home_view.dart';
 import 'splash_screen_view.dart';
 
@@ -15,5 +16,10 @@ final PageRegistry pageRegistry = PageRegistry.fromDefs(<PageDef>[
   PageDef(
     model: SplashScreenView.pageModel,
     builder: (_, PageModel view) => const SplashScreenView(),
+  ),
+
+  PageDef(
+    model: IncomeView.pageModel,
+    builder: (_, PageModel view) => const IncomeView(),
   ),
 ]);

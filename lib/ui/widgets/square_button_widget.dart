@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:text_responsive/text_responsive.dart';
 
 import 'icon_widget.dart';
+import 'subtitle_widget.dart';
+import 'title_widget.dart';
 
 class SquareButtonWidget extends StatelessWidget {
   const SquareButtonWidget({
@@ -42,14 +43,8 @@ class SquareButtonWidget extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   const SizedBox(height: 30.0),
-                  InlineTextWidget(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  InlineTextWidget(
-                    subtitle,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  TitleWidget(title: title),
+                  SubtitleWidget(subtitle: subtitle),
                 ],
               ),
             ),

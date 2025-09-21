@@ -82,6 +82,7 @@ class _SplashScreenViewState extends State<SplashScreenView> {
   @override
   Widget build(BuildContext context) {
     return OkanePageBuilder(
+      showWavyHeader: false,
       page: Column(
         children: <Widget>[
           const SizedBox(height: 280.0),
