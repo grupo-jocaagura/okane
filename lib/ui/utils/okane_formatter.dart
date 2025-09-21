@@ -16,6 +16,10 @@
 class OkaneFormatter {
   const OkaneFormatter();
 
+  static String intMoneyFormatter(int value) {
+    return moneyFormatter(value.toDouble());
+  }
+
   /// Devuelve un string con formato tipo: "$ 1'000.000,00"
   static String moneyFormatter(double value) {
     final bool isNegative = value < 0;
@@ -44,5 +48,12 @@ class OkaneFormatter {
 
     // Armar resultado final
     return '\$ ${isNegative ? '-' : ''}$formattedInt,$decimals';
+  }
+
+  static String dateFormatter(DateTime date) {
+    final String day = date.day.toString().padLeft(2, '0');
+    final String month = date.month.toString().padLeft(2, '0');
+    final String year = date.year.toString(); // últimos dos dígitos
+    return '$day/$month/$year';
   }
 }

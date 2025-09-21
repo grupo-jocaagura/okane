@@ -2,6 +2,7 @@ import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import 'expenses_view.dart';
 import 'income_view.dart';
+import 'movements_view.dart';
 import 'my_home_view.dart';
 import 'splash_screen_view.dart';
 
@@ -26,5 +27,9 @@ final PageRegistry pageRegistry = PageRegistry.fromDefs(<PageDef>[
   PageDef(
     model: ExpensesView.pageModel,
     builder: (_, PageModel view) => const ExpensesView(),
+  ),
+  PageDef(
+    model: MovementsView.pageModel,
+    builder: (_, PageModel view) => const MovementsView(),
   ),
 ]);

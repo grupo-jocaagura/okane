@@ -11,12 +11,14 @@ class InnerContentWidget extends StatelessWidget {
     this.subtitle = '',
     this.quarterTurns = 0,
     this.children = const <Widget>[],
+    this.topMargin = true,
   });
 
   final String title;
   final String subtitle;
   final int quarterTurns;
   final List<Widget> children;
+  final bool topMargin;
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -37,7 +39,7 @@ class InnerContentWidget extends StatelessWidget {
               IconWidget(quarterTurns: quarterTurns),
             ],
           ),
-          const SizedBox(height: 40.0),
+          if (topMargin) const SizedBox(height: 40.0),
           Row(
             children: <Widget>[
               const Expanded(child: SizedBox()),

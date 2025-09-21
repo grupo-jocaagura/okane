@@ -11,6 +11,7 @@ import '../widgets/projector_widget.dart';
 import '../widgets/square_button_widget.dart';
 import 'expenses_view.dart';
 import 'income_view.dart';
+import 'movements_view.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
@@ -72,12 +73,20 @@ class MyHomeView extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: <SquareButtonWidget>[
                     SquareButtonWidget(
+                      ontap: () => context.appManager.pageManager.push(
+                        MovementsView.pageModel,
+                      ),
                       quarterTurns: 4,
-                      title: 'Movimientos',
+                      title: kMovements,
                       subtitle: blocUserLedger.totalBalance,
                     ),
-                    const SquareButtonWidget(
+                    SquareButtonWidget(
                       quarterTurns: 2,
+                      ontap: () {
+                        context.appManager.notifications.showToast(
+                          'Proximamente',
+                        );
+                      },
                       title: 'Informes',
                       subtitle: 'Subhead',
                     ),

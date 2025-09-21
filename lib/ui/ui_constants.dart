@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 const String kIconPath = 'assets/imagotipo.png';
+const String kMonthIncomeLabel = 'Ingresos mes';
+const String kMonthExpenseLabel = 'Gastos mes';
 const String kIncomes = 'Ingresos';
 const String kExpenses = 'Gastos';
+const String kMovements = 'Movimientos';
 const String kAddIncome = 'Registra un ingreso';
 const String kAddExpense = 'Registra un gasto';
 const String kIncomeCategory = r'Categoría del ingreso';
