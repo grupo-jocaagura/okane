@@ -6,6 +6,7 @@ import '../domain/usecases/can_spend_usecase.dart';
 import '../domain/usecases/get_balance_usecase.dart';
 import '../domain/usecases/get_ledger_usecase.dart';
 import '../domain/usecases/listen_ledger_usecase.dart';
+import '../ui/utils/okane_formatter.dart';
 import 'bloc_error_item.dart';
 
 const LedgerModel defaultOkaneLedger = LedgerModel(
@@ -106,6 +107,15 @@ class BlocUserLedger extends BlocModule {
 
   /// Balance total del usuario.
   int get balance => _getBalance.execute(_userLedger.value);
+
+  int get incomes => MoneyUtils.totalAmount(_userLedger.value.incomeLedger);
+  int get expenses => MoneyUtils.totalAmount(_userLedger.value.expenseLedger);
+
+  String get incomesBalance =>
+      OkaneFormatter.moneyFormatter(incomes.toDouble());
+  String get totalBalance => OkaneFormatter.moneyFormatter(balance.toDouble());
+  String get expensesBalance =>
+      OkaneFormatter.moneyFormatter(expenses.toDouble());
 
   /// Representación en texto del estado del ledger.
   @override

@@ -10,7 +10,9 @@ import '../title_widget.dart';
 import 'bloc_income_form.dart';
 
 class FormLedgerWidget extends StatefulWidget {
-  const FormLedgerWidget({super.key});
+  const FormLedgerWidget({this.isIncome = true, super.key});
+
+  final bool isIncome;
 
   @override
   State<FormLedgerWidget> createState() => _FormLedgerWidgetState();
@@ -25,7 +27,7 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
     final BlocUserLedger ledgerBloc = appManager
         .requireModuleByKey<BlocUserLedger>(BlocUserLedger.name);
 
-    blocForm = BlocIncomeForm(ledgerBloc);
+    blocForm = BlocIncomeForm(ledgerBloc, isIncome: widget.isIncome);
     blocForm.updateBaseCategories();
   }
 
@@ -49,14 +51,14 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const SizedBox(
+          SizedBox(
             width: 312,
             height: 116,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                SizedBox(height: kDefaultHeightSeparator),
-                TitleWidget(title: 'Registra un ingreso'),
+                const SizedBox(height: kDefaultHeightSeparator),
+                TitleWidget(title: widget.isIncome ? kAddIncome : kAddExpense),
               ],
             ),
           ),
@@ -66,15 +68,15 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
             builder: (_, __) {
               final FieldState s = blocForm.amount;
               return JocaaguraAutocompleteInputWidget(
-                label: r'$ Monto',
-                placeholder: 'Ej. 120000',
+                label: kAmount,
+                placeholder: kIncomePlaceholder,
                 value: s.value,
                 errorText: s.errorText,
                 textInputType: TextInputType.number,
                 textInputAction: TextInputAction.next,
                 icondata: Icons.attach_money,
                 onChangedAttempt: blocForm.onAmountChangedAttempt,
-                onSubmittedAttempt: (_) {}, // pasa al siguiente campo
+                onSubmittedAttempt: (_) {},
               );
             },
           ),
@@ -85,15 +87,15 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
             builder: (_, __) {
               final FieldState s = blocForm.category;
               return JocaaguraAutocompleteInputWidget(
-                label: r'Categoría del ingreso',
-                placeholder: 'Ej. Salario, Venta...',
+                label: widget.isIncome ? kIncomeCategory : kExpenseCategory,
+                placeholder: kCategoryPlaceholder,
                 value: s.value,
                 errorText: s.errorText,
                 suggestList: s.suggestions,
                 textInputAction: TextInputAction.next,
                 icondata: Icons.category_outlined,
                 onChangedAttempt: blocForm.onCategoryChangedAttempt,
-                onSubmittedAttempt: (_) {}, // pasa al siguiente campo
+                onSubmittedAttempt: (_) {},
               );
             },
           ),
@@ -103,7 +105,7 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
             children: <Widget>[
               TextButton(
                 onPressed: context.appManager.pageManager.pop,
-                child: const InlineTextWidget('Cancelar'),
+                child: const InlineTextWidget(kCancelButtonLabel),
               ),
               TextButton(
                 onPressed: () async {
@@ -113,12 +115,16 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
                     (ErrorItem e) =>
                         appManager.notifications.showToast(e.title),
                     (_) {
-                      appManager.notifications.showToast('Ingreso registrado');
-                      appManager.pageManager.pop(); // volver
+                      appManager.notifications.showToast(
+                        widget.isIncome
+                            ? kSaveIncomeSuccessMessage
+                            : kSaveExpenseSuccessMessage,
+                      );
+                      appManager.pageManager.pop();
                     },
                   );
                 },
-                child: const InlineTextWidget('Guardar'),
+                child: const InlineTextWidget(kSaveButtonLabel),
               ),
             ],
           ),

@@ -7,9 +7,9 @@ import '../widgets/forms/form_ledger_widget.dart';
 import '../widgets/inner_content_widget.dart';
 import '../widgets/okane_page_builder.dart';
 
-class IncomeView extends StatelessWidget {
-  const IncomeView({super.key});
-  static const String name = 'income';
+class ExpensesView extends StatelessWidget {
+  const ExpensesView({super.key});
+  static const String name = 'expenses';
   static const PageModel pageModel = PageModel(
     name: name,
     segments: <String>[name],
@@ -22,10 +22,13 @@ class IncomeView extends StatelessWidget {
 
     return OkanePageBuilder(
       page: InnerContentWidget(
-        title: kIncomes,
-        quarterTurns: 1,
-        subtitle: '${kMonths[DateTime.now().month]} ${bloc.incomesBalance}',
-        children: const <Widget>[SizedBox(height: 100.0), FormLedgerWidget()],
+        title: kExpenses,
+        quarterTurns: 3,
+        subtitle: '${kMonths[DateTime.now().month]} ${bloc.expensesBalance}',
+        children: const <Widget>[
+          SizedBox(height: 100.0),
+          FormLedgerWidget(isIncome: false),
+        ],
       ),
     );
   }

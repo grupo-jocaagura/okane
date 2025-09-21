@@ -4,12 +4,12 @@ import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import '../../blocs/bloc_user_ledger.dart';
 import '../../config.dart';
 import '../ui_constants.dart';
-import '../utils/okane_formatter.dart';
 import '../widgets/balance_widget.dart';
 import '../widgets/circle_avatar_widget.dart';
 import '../widgets/okane_page_builder.dart';
 import '../widgets/projector_widget.dart';
 import '../widgets/square_button_widget.dart';
+import 'expenses_view.dart';
 import 'income_view.dart';
 
 class MyHomeView extends StatelessWidget {
@@ -38,10 +38,6 @@ class MyHomeView extends StatelessWidget {
       page: StreamBuilder<LedgerModel>(
         stream: blocUserLedger.ledgerModelStream,
         builder: (_, __) {
-          final LedgerModel ledger = blocUserLedger.userLedger;
-          final int ingresos = MoneyUtils.totalAmount(ledger.incomeLedger);
-          final int egresos = MoneyUtils.totalAmount(ledger.expenseLedger);
-          final int balance = ingresos - egresos;
           return ProjectorWidget(
             child: Column(
               children: <Widget>[
@@ -59,16 +55,15 @@ class MyHomeView extends StatelessWidget {
                       ),
                       quarterTurns: 1,
                       title: kIncomes,
-                      subtitle: OkaneFormatter.moneyFormatter(
-                        ingresos.toDouble(),
-                      ),
+                      subtitle: blocUserLedger.incomesBalance,
                     ),
                     SquareButtonWidget(
-                      quarterTurns: 3,
-                      title: 'Gastos',
-                      subtitle: OkaneFormatter.moneyFormatter(
-                        egresos.toDouble(),
+                      ontap: () => context.appManager.pageManager.push(
+                        ExpensesView.pageModel,
                       ),
+                      quarterTurns: 3,
+                      title: kExpenses,
+                      subtitle: blocUserLedger.expensesBalance,
                     ),
                   ],
                 ),
@@ -79,9 +74,7 @@ class MyHomeView extends StatelessWidget {
                     SquareButtonWidget(
                       quarterTurns: 4,
                       title: 'Movimientos',
-                      subtitle: OkaneFormatter.moneyFormatter(
-                        balance.toDouble(),
-                      ),
+                      subtitle: blocUserLedger.totalBalance,
                     ),
                     const SquareButtonWidget(
                       quarterTurns: 2,

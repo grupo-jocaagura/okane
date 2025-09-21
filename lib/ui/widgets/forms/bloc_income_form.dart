@@ -1,4 +1,3 @@
-// ui/blocs/bloc_income_form.dart
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../../blocs/bloc_user_ledger.dart';
@@ -8,9 +7,11 @@ import '../../utils/utils_ledger_categories.dart';
 
 /// Form BLoC sólo para la UI (no lógica de negocio).
 class BlocIncomeForm extends BlocModule {
-  BlocIncomeForm(this._ledger);
+  BlocIncomeForm(this._ledger, {this.isIncome = true});
 
   final BlocUserLedger _ledger;
+
+  final bool isIncome;
 
   // Estados controlados por la UI
   final BlocGeneral<FieldState> _amount = BlocGeneral<FieldState>(
@@ -37,11 +38,9 @@ class BlocIncomeForm extends BlocModule {
   FieldState get amount => _amount.value;
   FieldState get category => _category.value;
 
-  // Intentos desde la UI
   void onAmountChangedAttempt(String raw) {
-    // Dejamos solo dígitos
     final String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    final String clean = digits; // unidades enteras (sin centavos)
+    final String clean = digits;
     final String? error =
         (clean.isEmpty || int.tryParse(clean) == null || int.parse(clean) <= 0)
         ? 'Ingresa un monto válido mayor que 0'
@@ -92,12 +91,14 @@ class BlocIncomeForm extends BlocModule {
       amount: amountInt,
       category: category.value,
       createdAt: DateTime.now(),
-      concept: 'Prueba',
+      concept: category.value,
       id: '',
       date: DateTime.now(),
     );
 
-    final Either<ErrorItem, LedgerModel> r = await _ledger.addIncome(movement);
+    final Either<ErrorItem, LedgerModel> r = isIncome
+        ? await _ledger.addIncome(movement)
+        : await _ledger.addExpense(movement);
     return r;
   }
 
