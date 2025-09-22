@@ -45,7 +45,7 @@ class MyHomeView extends StatelessWidget {
                 const SizedBox(height: 166.0),
                 const CircleAvatarWidget(),
                 const SizedBox(height: 16),
-                const BalanceWidget(),
+                BalanceWidget(balance: blocUserLedger.totalBalance),
                 const SizedBox(height: 65),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
