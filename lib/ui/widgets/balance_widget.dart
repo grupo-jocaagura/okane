@@ -10,7 +10,7 @@ class BalanceWidget extends StatelessWidget {
     return SizedBox(
       width: 264,
       height: 32,
-      child: InlineTextWidget('Balance $balance}', textAlign: TextAlign.center),
+      child: InlineTextWidget('Balance $balance', textAlign: TextAlign.center),
     );
   }
 }
