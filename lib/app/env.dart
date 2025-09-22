@@ -1,3 +1,4 @@
+// env_config.dart
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../blocs/bloc_error_item.dart';
@@ -18,138 +19,135 @@ import '../infrastructure/services/hive_service_ws_database.dart';
 import '../infrastructure/services/service_okane_theme.dart';
 import '../ui/views/views.dart';
 
-/// Define los entornos disponibles para la aplicación.
-///
-/// Se utiliza en la clase [Env] para construir un [AppConfig] personalizado
-/// de acuerdo al entorno activo (`dev`, `qa`, `prod`).
+/// Entornos soportados para el armado de la app.
+/// Se usa en [Env.build] para crear un [AppConfig] especializado.
 enum AppEnvironment { dev, qa, prod }
 
-final BlocError _blocError = BlocError();
-final ServiceWSDatabase _serviceWSDatabase = FakeServiceWSDatabase();
-final ServiceWSDatabase _serviceProdWSDatabase = HiveServiceWSDatabase();
-final LedgerWsGateway _ledgerWsGateway = LedgerWsGatewayImpl(
-  _serviceWSDatabase,
-);
-final LedgerWsGateway _ledgerProdWsGateway = LedgerWsGatewayImpl(
-  _serviceProdWSDatabase,
-);
-final LedgerRepository _ledgerRepository = LedgerRepositoryImpl(
-  _ledgerWsGateway,
-);
-final LedgerRepository _ledgerProdRepository = LedgerRepositoryImpl(
-  _ledgerProdWsGateway,
-);
-final BlocUserLedger _blocUserLedger = BlocUserLedger(
-  addIncome: AddIncomeUseCase(_ledgerRepository),
-  addExpense: AddExpenseUseCase(_ledgerRepository),
-  getLedger: GetLedgerUseCase(_ledgerRepository),
-  listenLedger: ListenLedgerUseCase(_ledgerRepository),
-  canSpend: CanSpendUseCase(),
-  getBalance: GetBalanceUseCase(),
-  blocError: _blocError,
-);
-final BlocUserLedger _blocProdUserLedger = BlocUserLedger(
-  addIncome: AddIncomeUseCase(_ledgerProdRepository),
-  addExpense: AddExpenseUseCase(_ledgerProdRepository),
-  getLedger: GetLedgerUseCase(_ledgerProdRepository),
-  listenLedger: ListenLedgerUseCase(_ledgerProdRepository),
-  canSpend: CanSpendUseCase(),
-  getBalance: GetBalanceUseCase(),
-  blocError: _blocError,
-);
+/// -------------------------------
+/// 1) BINDINGS por ambiente
+/// -------------------------------
+/// Único lugar donde decidimos *qué* implementación usar en cada ambiente.
+class EnvBindings {
+  const EnvBindings({required this.wsDatabase});
 
-/// Generador de configuraciones para ambientes.
-///
-/// La clase [Env] permite construir una instancia de [AppConfig]
-/// según el entorno seleccionado ([AppEnvironment]).
-/// Cada configuración puede incluir diferentes servicios, gateways,
-/// repositorios y BLoCs personalizados.
-///
-/// Esta clase facilita:
-/// - Alternar entre entornos con una sola línea.
-/// - Reutilizar lógica de construcción.
-/// - Aislar configuraciones específicas.
-///
-/// ## Ejemplo de uso:
-///
-/// ```dart
-/// final AppConfig config = Env.build(AppEnvironment.dev);
-/// runApp(MyApp(config: config));
-/// ```
-class Env {
-  /// Construye la configuración correspondiente al entorno indicado.
-  ///
-  /// Esta función inicializa manualmente los servicios requeridos para el entorno.
-  /// Actualmente todos los entornos apuntan a [devAppConfig], pero pueden
-  /// extenderse fácilmente para producción o pruebas.
-  static AppConfig build(AppEnvironment env) {
+  /// Servicio WS-like para persistencia (simulado/real).
+  final ServiceWSDatabase wsDatabase;
+
+  /// Fábricas por ambiente.
+  static EnvBindings forEnv(AppEnvironment env) {
     switch (env) {
       case AppEnvironment.dev:
-        return devAppConfig;
-
+        return EnvBindings(wsDatabase: FakeServiceWSDatabase());
       case AppEnvironment.qa:
-        return devAppConfig; // reemplazar por configuración QA
-
+        // Si QA quiere datos reales pero en sandbox, puedes alternar aquí.
+        return EnvBindings(wsDatabase: HiveServiceWSDatabase());
       case AppEnvironment.prod:
-        return prodAppConfig; // reemplazar por configuración real
+        return EnvBindings(wsDatabase: HiveServiceWSDatabase());
     }
   }
 }
 
-/// Configuración base para el entorno de desarrollo.
-///
-/// Esta configuración utiliza `FakeServiceWSDatabase` como backend simulado
-/// y contiene wiring completo de dependencias con sus respectivos BLoCs.
-///
-/// Puede modificarse rápidamente para pruebas, demo, o entorno local.
-///
-/// ## Componentes incluidos:
-/// - BLoCs de UI (tema, navegación, responsive, etc.).
-/// - [BlocUserLedger] conectado a `LedgerRepositoryImpl`.
-/// - [BlocError] como manejador de errores global.
-///
-/// ## ¿Por qué usar esta estructura?
-/// - Permite testear sin servicios reales.
-/// - Mantiene la arquitectura desacoplada.
-/// - Es fácilmente escalable para otros entornos.
-final AppConfig devAppConfig = AppConfig(
-  blocTheme: BlocTheme(
-    themeUsecases: ThemeUsecases.fromRepo(
-      RepositoryThemeImpl(
-        gateway: GatewayThemeImpl(themeService: const ServiceOkaneTheme()),
-      ),
-    ),
-  ),
-  blocUserNotifications: BlocUserNotifications(),
-  blocLoading: BlocLoading(),
-  blocMainMenuDrawer: BlocMainMenuDrawer(),
-  blocSecondaryMenuDrawer: BlocSecondaryMenuDrawer(),
-  blocResponsive: BlocResponsive(),
-  blocOnboarding: BlocOnboarding(),
-  blocModuleList: <String, BlocModule>{
-    BlocUserLedger.name: _blocUserLedger,
-    BlocError.name: _blocError,
-  },
-  pageManager: PageManager(initial: navStackModel),
-);
+/// -------------------------------
+/// 2) FACTORÍAS puras de wiring
+/// -------------------------------
 
-final AppConfig prodAppConfig = AppConfig(
-  blocTheme: BlocTheme(
-    themeUsecases: ThemeUsecases.fromRepo(
-      RepositoryThemeImpl(
-        gateway: GatewayThemeImpl(themeService: const ServiceOkaneTheme()),
+/// Gateways
+class GatewayFactory {
+  const GatewayFactory();
+
+  LedgerWsGateway makeLedgerGateway(ServiceWSDatabase svc) {
+    return LedgerWsGatewayImpl(svc);
+  }
+}
+
+/// Repositorios
+class RepositoryFactory {
+  const RepositoryFactory();
+
+  LedgerRepository makeLedgerRepository(LedgerWsGateway gw) {
+    return LedgerRepositoryImpl(gw);
+  }
+}
+
+/// BLoCs de dominio de Okane
+class BlocFactory {
+  const BlocFactory();
+
+  /// Crea el [BlocUserLedger] cableado con sus casos de uso.
+  BlocUserLedger makeLedgerBloc({
+    required LedgerRepository repo,
+    required BlocError blocError,
+  }) {
+    return BlocUserLedger(
+      addIncome: AddIncomeUseCase(repo),
+      addExpense: AddExpenseUseCase(repo),
+      getLedger: GetLedgerUseCase(repo),
+      listenLedger: ListenLedgerUseCase(repo),
+      canSpend: CanSpendUseCase(),
+      getBalance: GetBalanceUseCase(),
+      blocError: blocError,
+    );
+  }
+
+  /// Crea el bloque temático (tema M3 + overrides + escala).
+  BlocTheme makeThemeBloc() {
+    return BlocTheme(
+      themeUsecases: ThemeUsecases.fromRepo(
+        RepositoryThemeImpl(
+          gateway: GatewayThemeImpl(themeService: const ServiceOkaneTheme()),
+        ),
       ),
-    ),
-  ),
-  blocUserNotifications: BlocUserNotifications(),
-  blocLoading: BlocLoading(),
-  blocMainMenuDrawer: BlocMainMenuDrawer(),
-  blocSecondaryMenuDrawer: BlocSecondaryMenuDrawer(),
-  blocResponsive: BlocResponsive(),
-  blocOnboarding: BlocOnboarding(),
-  blocModuleList: <String, BlocModule>{
-    BlocUserLedger.name: _blocProdUserLedger,
-    BlocError.name: _blocError,
-  },
-  pageManager: PageManager(initial: navStackModel),
-);
+    );
+  }
+}
+
+/// -------------------------------
+/// 3) BUILDER de AppConfig
+/// -------------------------------
+
+/// Construye un [AppConfig] completamente cableado según el ambiente.
+///
+/// # Ejemplo (MD)
+/// ```dart
+/// final AppConfig config = Env.build(AppEnvironment.dev);
+/// runApp(OkaneApp(appManager: AppManager(config), registry: pageRegistry));
+/// ```
+class Env {
+  static AppConfig build(AppEnvironment env) {
+    final EnvBindings bindings = EnvBindings.forEnv(env);
+    const GatewayFactory gateways = GatewayFactory();
+    const RepositoryFactory repositories = RepositoryFactory();
+    const BlocFactory blocs = BlocFactory();
+
+    final LedgerWsGateway ledgerGw = gateways.makeLedgerGateway(
+      bindings.wsDatabase,
+    );
+    final LedgerRepository ledgerRepo = repositories.makeLedgerRepository(
+      ledgerGw,
+    );
+
+    final BlocError blocError = BlocError();
+    final BlocUserLedger blocUserLedger = blocs.makeLedgerBloc(
+      repo: ledgerRepo,
+      blocError: blocError,
+    );
+
+    return AppConfig(
+      blocTheme: blocs.makeThemeBloc(),
+
+      blocUserNotifications: BlocUserNotifications(),
+      blocLoading: BlocLoading(),
+      blocMainMenuDrawer: BlocMainMenuDrawer(),
+      blocSecondaryMenuDrawer: BlocSecondaryMenuDrawer(),
+      blocResponsive: BlocResponsive(),
+      blocOnboarding: BlocOnboarding(),
+
+      blocModuleList: <String, BlocModule>{
+        BlocUserLedger.name: blocUserLedger,
+        BlocError.name: blocError,
+      },
+
+      pageManager: PageManager(initial: navStackModel),
+    );
+  }
+}
