@@ -120,7 +120,7 @@ class _FormLedgerWidgetState extends State<FormLedgerWidget> {
                             ? kSaveIncomeSuccessMessage
                             : kSaveExpenseSuccessMessage,
                       );
-                      appManager.pageManager.pop();
+                      context.appManager.pageManager.pop();
                     },
                   );
                 },

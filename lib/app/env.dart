@@ -14,6 +14,7 @@ import '../domain/usecases/listen_ledger_usecase.dart';
 import '../infrastructure/gateways/ledger_ws_gateway_impl.dart';
 import '../infrastructure/repositories/ledger_repository_impl.dart';
 import '../infrastructure/services/fake_service_w_s_database.dart';
+import '../infrastructure/services/hive_service_ws_database.dart';
 import '../infrastructure/services/service_okane_theme.dart';
 import '../ui/views/views.dart';
 
@@ -25,17 +26,33 @@ enum AppEnvironment { dev, qa, prod }
 
 final BlocError _blocError = BlocError();
 final ServiceWSDatabase _serviceWSDatabase = FakeServiceWSDatabase();
+final ServiceWSDatabase _serviceProdWSDatabase = HiveServiceWSDatabase();
 final LedgerWsGateway _ledgerWsGateway = LedgerWsGatewayImpl(
   _serviceWSDatabase,
 );
+final LedgerWsGateway _ledgerProdWsGateway = LedgerWsGatewayImpl(
+  _serviceProdWSDatabase,
+);
 final LedgerRepository _ledgerRepository = LedgerRepositoryImpl(
   _ledgerWsGateway,
+);
+final LedgerRepository _ledgerProdRepository = LedgerRepositoryImpl(
+  _ledgerProdWsGateway,
 );
 final BlocUserLedger _blocUserLedger = BlocUserLedger(
   addIncome: AddIncomeUseCase(_ledgerRepository),
   addExpense: AddExpenseUseCase(_ledgerRepository),
   getLedger: GetLedgerUseCase(_ledgerRepository),
   listenLedger: ListenLedgerUseCase(_ledgerRepository),
+  canSpend: CanSpendUseCase(),
+  getBalance: GetBalanceUseCase(),
+  blocError: _blocError,
+);
+final BlocUserLedger _blocProdUserLedger = BlocUserLedger(
+  addIncome: AddIncomeUseCase(_ledgerProdRepository),
+  addExpense: AddExpenseUseCase(_ledgerProdRepository),
+  getLedger: GetLedgerUseCase(_ledgerProdRepository),
+  listenLedger: ListenLedgerUseCase(_ledgerProdRepository),
   canSpend: CanSpendUseCase(),
   getBalance: GetBalanceUseCase(),
   blocError: _blocError,
@@ -74,7 +91,7 @@ class Env {
         return devAppConfig; // reemplazar por configuración QA
 
       case AppEnvironment.prod:
-        return devAppConfig; // reemplazar por configuración real
+        return prodAppConfig; // reemplazar por configuración real
     }
   }
 }
@@ -111,6 +128,27 @@ final AppConfig devAppConfig = AppConfig(
   blocOnboarding: BlocOnboarding(),
   blocModuleList: <String, BlocModule>{
     BlocUserLedger.name: _blocUserLedger,
+    BlocError.name: _blocError,
+  },
+  pageManager: PageManager(initial: navStackModel),
+);
+
+final AppConfig prodAppConfig = AppConfig(
+  blocTheme: BlocTheme(
+    themeUsecases: ThemeUsecases.fromRepo(
+      RepositoryThemeImpl(
+        gateway: GatewayThemeImpl(themeService: const ServiceOkaneTheme()),
+      ),
+    ),
+  ),
+  blocUserNotifications: BlocUserNotifications(),
+  blocLoading: BlocLoading(),
+  blocMainMenuDrawer: BlocMainMenuDrawer(),
+  blocSecondaryMenuDrawer: BlocSecondaryMenuDrawer(),
+  blocResponsive: BlocResponsive(),
+  blocOnboarding: BlocOnboarding(),
+  blocModuleList: <String, BlocModule>{
+    BlocUserLedger.name: _blocProdUserLedger,
     BlocError.name: _blocError,
   },
   pageManager: PageManager(initial: navStackModel),
