@@ -22,7 +22,7 @@ class FakeServiceWSDatabase implements ServiceWSDatabase {
   Map<String, dynamic> _ledgerJson = defaultOkaneLedger.toJson();
 
   @override
-  Future<Either<ErrorItem, void>> write(
+  Future<Either<ErrorItem, Map<String, dynamic>>> write(
     String path,
     Map<String, dynamic> data,
   ) async {

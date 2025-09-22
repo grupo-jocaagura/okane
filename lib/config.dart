@@ -4,4 +4,4 @@ import 'app/env.dart';
 
 // final AppManager appManager = AppManager(Env.build(AppEnvironment.dev));
 
-final AppManager appManager = AppManager(Env.build(AppEnvironment.prod));
+final AppManager appManager = AppManager(Env.build(AppEnvironment.qa));

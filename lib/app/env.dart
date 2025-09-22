@@ -1,4 +1,4 @@
-// env_config.dart
+import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../blocs/bloc_error_item.dart';
@@ -39,8 +39,9 @@ class EnvBindings {
       case AppEnvironment.dev:
         return EnvBindings(wsDatabase: FakeServiceWSDatabase());
       case AppEnvironment.qa:
-        // Si QA quiere datos reales pero en sandbox, puedes alternar aquí.
-        return EnvBindings(wsDatabase: HiveServiceWSDatabase());
+        return EnvBindings(
+          wsDatabase: HiveServiceWSDatabase(boxName: 'qa_okane', verbose: true),
+        );
       case AppEnvironment.prod:
         return EnvBindings(wsDatabase: HiveServiceWSDatabase());
     }
@@ -122,6 +123,9 @@ class Env {
     final LedgerWsGateway ledgerGw = gateways.makeLedgerGateway(
       bindings.wsDatabase,
     );
+    if (env != AppEnvironment.prod) {
+      smokeTestLedger(ledgerGw);
+    }
     final LedgerRepository ledgerRepo = repositories.makeLedgerRepository(
       ledgerGw,
     );
@@ -150,4 +154,26 @@ class Env {
       pageManager: PageManager(initial: navStackModel),
     );
   }
+}
+
+void smokeTestLedger(LedgerWsGateway gw) async {
+  debugPrint('[SMOKE] smoke test init');
+  await Future.delayed(const Duration(seconds: 3));
+  debugPrint('[SMOKE] smoke test executing');
+  // Suscribir primero (verás el boot emit)
+  gw.onLedgerUpdated().listen((e) {
+    e.when(
+      (err) => debugPrint('[SMOKE] stream LEFT: $err'),
+      (json) => debugPrint('[SMOKE] stream RIGHT: ${json['nameOfLedger']}'),
+    );
+  });
+
+  // Guardar (espera resultado)
+  final ledgerJson = defaultOkaneLedger.toJson();
+  final res = await gw.saveLedger(ledgerJson);
+  debugPrint('[SMOKE] write result: $res');
+
+  // Leer
+  final rd = await gw.fetchLedger();
+  debugPrint('[SMOKE] read result: $rd');
 }

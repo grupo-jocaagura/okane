@@ -3,15 +3,15 @@ import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import '../../domain/entities/services/service_w_s_database.dart';
 import '../../domain/gateway/ledger_ws_gateway.dart';
 
-/// Implementación del Gateway WebSocket que interactúa con la fuente de datos externa.
-///
-/// Se limita a operaciones con Map<String, dynamic>. No realiza parsing a modelos.
+/// Gateway WS que delega en el servicio persistente.
 class LedgerWsGatewayImpl implements LedgerWsGateway {
   LedgerWsGatewayImpl(this._service);
   final ServiceWSDatabase _service;
 
   @override
-  Future<Either<ErrorItem, void>> saveLedger(Map<String, dynamic> ledger) {
+  Future<Either<ErrorItem, Map<String, dynamic>>> saveLedger(
+    Map<String, dynamic> ledger,
+  ) {
     return _service.write(LedgerWsGateway.ledgerPath, ledger);
   }
 
