@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import 'package:text_responsive/text_responsive.dart';
 
-import '../../main.dart';
 import '../widgets/okane_page_builder.dart';
 import 'my_home_view.dart';
 
@@ -67,9 +66,7 @@ class _SplashScreenViewState extends State<SplashScreenView> {
 
   void navigate() {
     if (context.mounted) {
-      context.appManager.pageManager.debugLogStack(' BEFORE NAV');
       context.appManager.replaceTopModel(MyHomeView.pageModel);
-      context.appManager.pageManager.debugLogStack('  AFTER NAV');
     }
   }
 
