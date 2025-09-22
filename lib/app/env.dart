@@ -14,6 +14,7 @@ import '../domain/usecases/listen_ledger_usecase.dart';
 import '../infrastructure/gateways/ledger_ws_gateway_impl.dart';
 import '../infrastructure/repositories/ledger_repository_impl.dart';
 import '../infrastructure/services/fake_service_w_s_database.dart';
+import '../infrastructure/services/service_okane_theme.dart';
 import '../ui/views/views.dart';
 
 /// Define los entornos disponibles para la aplicación.
@@ -24,10 +25,12 @@ enum AppEnvironment { dev, qa, prod }
 
 final BlocError _blocError = BlocError();
 final ServiceWSDatabase _serviceWSDatabase = FakeServiceWSDatabase();
-final LedgerWsGateway _ledgerWsGateway =
-    LedgerWsGatewayImpl(_serviceWSDatabase);
-final LedgerRepository _ledgerRepository =
-    LedgerRepositoryImpl(_ledgerWsGateway);
+final LedgerWsGateway _ledgerWsGateway = LedgerWsGatewayImpl(
+  _serviceWSDatabase,
+);
+final LedgerRepository _ledgerRepository = LedgerRepositoryImpl(
+  _ledgerWsGateway,
+);
 final BlocUserLedger _blocUserLedger = BlocUserLedger(
   addIncome: AddIncomeUseCase(_ledgerRepository),
   addExpense: AddExpenseUseCase(_ledgerRepository),
@@ -95,7 +98,9 @@ class Env {
 final AppConfig devAppConfig = AppConfig(
   blocTheme: BlocTheme(
     themeUsecases: ThemeUsecases.fromRepo(
-      RepositoryThemeImpl(gateway: GatewayThemeImpl()),
+      RepositoryThemeImpl(
+        gateway: GatewayThemeImpl(themeService: const ServiceOkaneTheme()),
+      ),
     ),
   ),
   blocUserNotifications: BlocUserNotifications(),
