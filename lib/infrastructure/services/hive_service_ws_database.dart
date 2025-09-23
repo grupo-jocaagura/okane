@@ -212,14 +212,12 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
   }
 
   @override
-  Stream<Either<ErrorItem, Map<String, dynamic>>> onValue(String path) async* {
-    // emite snapshot inmediato
-    final Either<ErrorItem, Map<String, dynamic>> snap = await _snapshot();
-    _streamBloc.value = snap;
-    yield snap;
+  Stream<Either<ErrorItem, Map<String, dynamic>>> onValue(String path) {
+    _snapshot().then((Either<ErrorItem, Map<String, dynamic>> snap) {
+      _streamBloc.value = snap;
+    });
 
-    // continúa con stream reactivo
-    yield* _streamBloc.stream;
+    return _streamBloc.stream;
   }
 
   Future<void> dispose() async {

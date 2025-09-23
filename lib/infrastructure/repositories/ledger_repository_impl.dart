@@ -4,6 +4,7 @@ import '../../blocs/bloc_user_ledger.dart';
 import '../../domain/errors/financial_error_items.dart';
 import '../../domain/gateway/ledger_ws_gateway.dart';
 import '../../domain/repositories/ledger_reporitory.dart';
+import '../mappers/ldger_model_mapper.dart';
 
 class LedgerRepositoryImpl implements LedgerRepository {
   LedgerRepositoryImpl(this._gateway);
@@ -137,10 +138,13 @@ class LedgerRepositoryImpl implements LedgerRepository {
       Either<ErrorItem, Map<String, dynamic>> event,
     ) {
       return event.when(
-        (ErrorItem error) => Left<ErrorItem, LedgerModel>(error),
+        (ErrorItem error) {
+          return Left<ErrorItem, LedgerModel>(error);
+        },
         (Map<String, dynamic> json) {
           try {
-            return Right<ErrorItem, LedgerModel>(LedgerModel.fromJson(json));
+            final LedgerModel model = LedgerModelMapper.fromAnyMap(json);
+            return Right<ErrorItem, LedgerModel>(model);
           } catch (_) {
             return Left<ErrorItem, LedgerModel>(
               FinancialErrorItems.invalidLedgerFormat(),

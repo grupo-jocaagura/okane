@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../domain/usecases/add_expense_usecase.dart';
@@ -51,20 +53,21 @@ class BlocUserLedger extends BlocModule {
   Stream<LedgerModel> get ledgerModelStream => _userLedger.stream;
   LedgerModel get userLedger => _userLedger.value;
 
+  StreamSubscription<Either<ErrorItem, LedgerModel>>? _sub;
+
   /// Inicializa el ledger con los datos remotos y comienza a escuchar cambios.
   Future<void> initialize() async {
-    final Either<ErrorItem, LedgerModel> result = await _getLedger.execute();
-    result.when(
-      (ErrorItem error) => _blocError.report(error),
-      (LedgerModel ledger) => _userLedger.value = ledger,
-    );
+    // 1) Escuchar primero
+    _sub ??= _listenLedger.execute().listen((Either<ErrorItem, LedgerModel> e) {
+      e.fold((ErrorItem err) => _blocError.report(err), (LedgerModel m) {
+        _userLedger.value = m;
+      });
+    });
 
-    _listenLedger.execute().listen((Either<ErrorItem, LedgerModel> event) {
-      event.when(
-        (ErrorItem error) =>
-            _blocError.report(error), // manejar error si es necesario
-        (LedgerModel remoteLedger) => _userLedger.value = remoteLedger,
-      );
+    // 2) Snapshot después
+    final Either<ErrorItem, LedgerModel> res = await _getLedger.execute();
+    res.fold((ErrorItem err) => _blocError.report(err), (LedgerModel m) {
+      _userLedger.value = m;
     });
   }
 
@@ -130,6 +133,7 @@ class BlocUserLedger extends BlocModule {
   /// Libera los recursos del Bloc.
   @override
   void dispose() {
+    _sub?.cancel();
     _userLedger.dispose();
   }
 }

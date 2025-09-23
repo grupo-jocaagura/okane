@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import 'package:text_responsive/text_responsive.dart';
 
+import '../../blocs/bloc_user_ledger.dart';
+import '../../config.dart';
 import '../widgets/okane_page_builder.dart';
 import 'my_home_view.dart';
 
@@ -38,10 +40,27 @@ class _SplashScreenViewState extends State<SplashScreenView> {
     final List<OnboardingStep> steps = <OnboardingStep>[
       OnboardingStep(
         title: 'Probando',
-        autoAdvanceAfter: const Duration(seconds: 5),
+        autoAdvanceAfter: const Duration(seconds: 3),
         description:
             'Probando funcion del onboarding, simulando carga del canvas',
         onEnter: () async => Right<ErrorItem, Unit>(Unit.value),
+      ),
+      OnboardingStep(
+        title: 'Suscribiendo',
+        autoAdvanceAfter: const Duration(seconds: 3),
+        description: 'Suscribiendo la base de datos',
+        onEnter: () async {
+          try {
+            final BlocUserLedger bloc = appManager
+                .requireModuleByKey<BlocUserLedger>(BlocUserLedger.name);
+            unawaited(bloc.initialize());
+          } catch (e) {
+            return Left<ErrorItem, Unit>(
+              ErrorItem(title: '$e', code: 'DANGER', description: e.toString()),
+            );
+          }
+          return Right<ErrorItem, Unit>(Unit.value);
+        },
       ),
     ];
 
