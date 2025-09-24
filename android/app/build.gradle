@@ -41,8 +41,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            debuggable true
+        }
         release {
-            signingConfig signingConfigs.release   // <- usa la release real
+            signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
         }

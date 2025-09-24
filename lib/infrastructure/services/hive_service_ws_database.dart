@@ -12,11 +12,12 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
   HiveServiceWSDatabase({
     String boxName = 'demo_okane',
     String? dataSubDir,
-    bool verbose = true,
+    bool verbose = false,
+    FutureOr<Map<String, dynamic>> Function()? seedProvider,
   }) : _boxName = boxName,
        _subDir = dataSubDir ?? 'OkaneData',
-       _verbose = verbose {
-    // arranca “frío”
+       _verbose = verbose,
+       _seedProvider = seedProvider {
     _streamBloc.value = Left<ErrorItem, Map<String, dynamic>>(
       ErrorItem(
         title: 'Stream frío',
@@ -30,6 +31,7 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
   final String _boxName;
   final String _subDir;
   final bool _verbose;
+  final FutureOr<Map<String, dynamic>> Function()? _seedProvider;
 
   String get _key => LedgerWsGateway.ledgerPath;
 
@@ -48,12 +50,11 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
       );
 
   void _log(String m, [Map<String, dynamic>? meta]) {
-    if (!_verbose) {
-      return;
+    if (_verbose) {
+      debugPrint(
+        '[HiveWS] $m :: ${<String, dynamic>{'box': _boxName, 'subDir': _subDir, ...?meta}}',
+      );
     }
-    debugPrint(
-      '[HiveWS] $m :: ${<String, dynamic>{'box': _boxName, 'subDir': _subDir, ...?meta}}',
-    );
   }
 
   Future<void> _ensureInit() async {
@@ -97,6 +98,31 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
         (doc[LedgerEnum.expenseLedger.name] is List);
   }
 
+  Map<String, dynamic> _defaultLedgerJson() => const LedgerModel(
+    nameOfLedger: 'defaultOkane',
+    incomeLedger: <FinancialMovementModel>[],
+    expenseLedger: <FinancialMovementModel>[],
+  ).toJson();
+
+  Future<Map<String, dynamic>> _getSeedJson() async {
+    final Map<String, dynamic> j =
+        await (_seedProvider?.call() ?? _defaultLedgerJson());
+    return _isValidLedger(j) ? j : _defaultLedgerJson();
+  }
+
+  Future<Either<ErrorItem, Map<String, dynamic>>> _selfHealAndReturn() async {
+    final Map<String, dynamic> seeded = await _getSeedJson();
+    await _box!.put(_key, seeded);
+    await _box!.flush();
+    _log('self-heal write', <String, dynamic>{
+      'key': _key,
+      'seedKeys': seeded.keys.toList(),
+    });
+    return Right<ErrorItem, Map<String, dynamic>>(
+      Map<String, dynamic>.from(seeded),
+    );
+  }
+
   ErrorItem _err(
     String code,
     String title,
@@ -123,25 +149,36 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
           ),
         );
       }
-      if (_box!.containsKey(_key)) {
-        final Map<String, dynamic>? m = _safeMap(_box!.get(_key));
-        if (m == null || !_isValidLedger(m)) {
-          return Left<ErrorItem, Map<String, dynamic>>(
-            _err(
-              'ERR_FORMAT',
-              'Formato inválido',
-              'El valor guardado no es un Map<String, dynamic>.',
-              <String, dynamic>{'key': _key},
-            ),
-          );
-        }
-        return Right<ErrorItem, Map<String, dynamic>>(_copyJson(m));
+
+      // 🔸 Si el box está vacío en primera ejecución: sembrar sí o sí
+      if (_box!.isEmpty) {
+        _log('snapshot: empty box -> seed');
+        return await _selfHealAndReturn();
       }
-      // seed si no existe
-      final Map<String, dynamic> seeded = defaultMovement.toJson();
-      await _box!.put(_key, seeded);
-      await _box!.flush();
-      return Right<ErrorItem, Map<String, dynamic>>(_copyJson(seeded));
+
+      final bool hasKey = _box!.containsKey(_key);
+      if (!hasKey) {
+        _log('snapshot: missing key -> seed', <String, dynamic>{'key': _key});
+        return await _selfHealAndReturn();
+      }
+
+      final dynamic raw = _box!.get(_key);
+      final Map<String, dynamic>? m = _safeMap(raw);
+      if (m == null || !_isValidLedger(m)) {
+        final Map<String, dynamic> message = <String, dynamic>{
+          'isMap': raw is Map,
+          'hasName': m?.containsKey(LedgerEnum.nameOfLedger.name),
+          'hasInc': m?.containsKey(LedgerEnum.incomeLedger.name),
+          'hasExp': m?.containsKey(LedgerEnum.expenseLedger.name),
+        };
+
+        _log('snapshot: invalid payload -> self-heal', message);
+        return await _selfHealAndReturn();
+      }
+
+      return Right<ErrorItem, Map<String, dynamic>>(
+        Map<String, dynamic>.from(m),
+      );
     } catch (e, st) {
       return Left<ErrorItem, Map<String, dynamic>>(
         _err(
@@ -156,7 +193,24 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
 
   @override
   Future<Either<ErrorItem, Map<String, dynamic>>> read(String path) async {
-    final Either<ErrorItem, Map<String, dynamic>> snap = await _snapshot();
+    Either<ErrorItem, Map<String, dynamic>> snap = await _snapshot();
+
+    if (snap.isLeft) {
+      _log('read: got LEFT -> self-heal + retry');
+      try {
+        await _ensureInit();
+        if (!(_box?.isOpen ?? false)) {
+          return snap;
+        }
+        snap = await _selfHealAndReturn();
+      } catch (e, st) {
+        _log('read: self-heal failed', <String, dynamic>{
+          'error': e.toString(),
+          'trace': st.toString(),
+        });
+      }
+    }
+
     _streamBloc.value = snap; // sincroniza para oyentes tardíos
     _log('read', <String, dynamic>{
       'in': path,
@@ -214,6 +268,9 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
   @override
   Stream<Either<ErrorItem, Map<String, dynamic>>> onValue(String path) {
     _snapshot().then((Either<ErrorItem, Map<String, dynamic>> snap) {
+      _log('onValue boot emit', <String, dynamic>{
+        'result': snap.isRight ? 'RIGHT' : 'LEFT',
+      });
       _streamBloc.value = snap;
     });
 

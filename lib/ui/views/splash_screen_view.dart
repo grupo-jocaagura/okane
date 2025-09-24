@@ -39,14 +39,13 @@ class _SplashScreenViewState extends State<SplashScreenView> {
 
     final List<OnboardingStep> steps = <OnboardingStep>[
       OnboardingStep(
-        title: 'Probando',
+        title: 'Verion 1.9.0',
         autoAdvanceAfter: const Duration(seconds: 3),
-        description:
-            'Probando funcion del onboarding, simulando carga del canvas',
+        description: 'Inicializando',
         onEnter: () async => Right<ErrorItem, Unit>(Unit.value),
       ),
       OnboardingStep(
-        title: 'Suscribiendo',
+        title: 'Suscribiendo datos',
         autoAdvanceAfter: const Duration(seconds: 3),
         description: 'Suscribiendo la base de datos',
         onEnter: () async {
