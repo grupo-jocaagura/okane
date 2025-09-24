@@ -1,4 +1,4 @@
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 /// Contrato del Gateway para acceder al ledger del usuario mediante WebSocket.
 ///
@@ -11,7 +11,9 @@ abstract class LedgerWsGateway {
   /// Envía una versión nueva del ledger al backend.
   ///
   /// Retorna un `Right<void>` si el envío fue exitoso, o un `Left<ErrorItem>` si hubo error.
-  Future<Either<ErrorItem, void>> saveLedger(Map<String, dynamic> ledger);
+  Future<Either<ErrorItem, Map<String, dynamic>>> saveLedger(
+    Map<String, dynamic> ledger,
+  );
 
   /// Recupera la última versión persistida del ledger del usuario.
   ///

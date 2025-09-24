@@ -12,6 +12,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+- [Added] for new features.
+- [Changed] for changes in existing functionality.
+- [Deprecated] for soon-to-be removed features.
+- [Removed] for now removed features.
+- [Fixed] for any bug fixes.
+- [Security] in case of vulnerabilities.
+
+## [1.10.0] - 2025-09-24
+
+### Added
+- App-wide theming pipeline using `BlocTheme` + `ProviderTheme` + `ServiceTheme`.
+- Base `ThemeData` derived from brand seed color (Material 3 `ColorScheme`) with light & dark variants.
+- Centralized typography, icon theme and surface/elevation defaults in `app_theme.dart`.
+- Integration with `AppManager`/root app to broadcast `ThemeData` reactively (ready for runtime switches).
+- Examples in code comments (MD) showing how to consume theme in widgets (buttons, text, surfaces).
+
+### Changed
+- Replaced hard-coded colors with theme tokens across UI widgets (AppBar, Scaffold, buttons, text).
+- Harmonized paddings and component states to follow the new color scheme.
+
+### Build
+- Implements dev mode and release actions.
+- No third-party packages added for theming (keeps stack clean).
+
+## [1.9.0] - 2025-09-22
+
+### Fixed
+- Store requirements and warnings wording and handling.
+
+## [1.8.0] - 2025-09-20
+
+### Added
+- Implemented the `LocalStorage` foundation for persistence.
+
 ## [1.7.0] - 2025-06-02
 
 ### Added

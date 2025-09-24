@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import 'package:okane/domain/errors/financial_error_items.dart';
 import 'package:okane/infrastructure/gateways/ledger_ws_gateway_impl.dart';
 import 'package:okane/infrastructure/repositories/ledger_repository_impl.dart';
@@ -52,8 +52,9 @@ void main() {
   });
 
   test('addIncome agrega movimiento correctamente', () async {
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addIncome(income);
+    final Either<ErrorItem, LedgerModel> result = await repository.addIncome(
+      income,
+    );
     expect(result.isRight, true);
     expect(
       result.when(
@@ -65,8 +66,9 @@ void main() {
   });
 
   test('addIncome con monto inválido retorna error', () async {
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addIncome(invalid);
+    final Either<ErrorItem, LedgerModel> result = await repository.addIncome(
+      invalid,
+    );
     expect(result.isLeft, true);
     expect(
       result.when((ErrorItem err) => err.code, (_) => ''),
@@ -82,8 +84,9 @@ void main() {
       concept: 'Gasto',
       category: 'Expense',
     );
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addExpense(expense);
+    final Either<ErrorItem, LedgerModel> result = await repository.addExpense(
+      expense,
+    );
     expect(result.isRight, true);
     expect(
       result.when(
@@ -95,8 +98,9 @@ void main() {
   });
 
   test('addExpense con monto inválido retorna error', () async {
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addExpense(invalid);
+    final Either<ErrorItem, LedgerModel> result = await repository.addExpense(
+      invalid,
+    );
     expect(result.isLeft, true);
     expect(
       result.when((ErrorItem err) => err.code, (_) => ''),
@@ -105,8 +109,9 @@ void main() {
   });
 
   test('addExpense sin saldo suficiente retorna error de balance', () async {
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addExpense(overExpense);
+    final Either<ErrorItem, LedgerModel> result = await repository.addExpense(
+      overExpense,
+    );
     expect(result.isLeft, true);
     expect(
       result.when((ErrorItem err) => err.code, (_) => ''),
@@ -117,19 +122,17 @@ void main() {
   test('subscribeToLedgerChanges emite cambios correctamente', () async {
     final List<LedgerModel> updates = <LedgerModel>[];
 
-    repository
-        .subscribeToLedgerChanges()
-        .listen((Either<ErrorItem, LedgerModel> event) {
-      event.when(
-        (_) => null,
-        (LedgerModel m) => updates.add(m),
-      );
+    repository.subscribeToLedgerChanges().listen((
+      Either<ErrorItem, LedgerModel> event,
+    ) {
+      event.when((_) => null, (LedgerModel m) => updates.add(m));
     });
 
     await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    final Either<ErrorItem, LedgerModel> result =
-        await repository.addIncome(income);
+    final Either<ErrorItem, LedgerModel> result = await repository.addIncome(
+      income,
+    );
     expect(result.isRight, true);
 
     await Future<void>.delayed(const Duration(milliseconds: 30));

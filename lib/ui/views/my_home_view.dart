@@ -1,21 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:jocaagura_domain/jocaagura_domain.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
-import '../../blocs/bloc_error_item.dart';
 import '../../blocs/bloc_user_ledger.dart';
 import '../../config.dart';
+import '../ui_constants.dart';
+import '../widgets/balance_widget.dart';
+import '../widgets/circle_avatar_widget.dart';
 import '../widgets/okane_page_builder.dart';
+import '../widgets/projector_widget.dart';
+import '../widgets/square_button_widget.dart';
+import 'expenses_view.dart';
+import 'income_view.dart';
+import 'movements_view.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
 
-  static String name = 'my-home-view';
+  static const String name = 'my-home-view';
+  static const PageModel pageModel = PageModel(
+    name: name,
+    segments: <String>[name],
+  );
 
   @override
   Widget build(BuildContext context) {
-    final BlocUserLedger blocUserLedger =
-        appManager.blocCore.getBlocModule<BlocUserLedger>(BlocUserLedger.name);
+    final BlocUserLedger blocUserLedger = appManager
+        .requireModuleByKey<BlocUserLedger>(BlocUserLedger.name);
+
     context.appManager.mainMenu.addMainMenuOption(
       onPressed: () {
         debugPrint('Test me');
@@ -28,77 +39,61 @@ class MyHomeView extends StatelessWidget {
       page: StreamBuilder<LedgerModel>(
         stream: blocUserLedger.ledgerModelStream,
         builder: (_, __) {
-          final LedgerModel ledger = blocUserLedger.userLedger;
-          final int ingresos = MoneyUtils.totalAmount(ledger.incomeLedger);
-          final int egresos = MoneyUtils.totalAmount(ledger.expenseLedger);
-          final int balance = ingresos - egresos;
-
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text('✔ Ingresos: $ingresos'),
-              Text('💸 Egresos: $egresos'),
-              Text('📒 Balance: $balance'),
-              const Text(
-                'You have pushed the button this many times:',
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      blocUserLedger.addIncome(
-                        FinancialMovementModel(
-                          id: DateTime.now().toIso8601String(),
-                          amount: 1000,
-                          concept: 'Ingreso aleatorio',
-                          category: 'Salary',
-                          date: DateTime.now(),
-                          createdAt: DateTime.now(),
-                          detailedDescription: 'Ingreso generado',
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar Ingreso'),
-                  ),
-                  const SizedBox(width: 16),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      blocUserLedger.addExpense(
-                        FinancialMovementModel(
-                          id: DateTime.now().toIso8601String(),
-                          amount: 500,
-                          concept: 'Gasto aleatorio',
-                          category: 'Food',
-                          date: DateTime.now(),
-                          createdAt: DateTime.now(),
-                          detailedDescription: 'Egreso generado',
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.remove),
-                    label: const Text('Agregar Gasto'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () {
-                  final BlocError blocError = appManager.blocCore
-                      .getBlocModule<BlocError>(BlocError.name);
-
-                  blocError.report(
-                    defaultErrorItem.copyWith(
-                      errorLevel: ErrorLevelEnum.warning,
+          return ProjectorWidget(
+            child: Column(
+              children: <Widget>[
+                const SizedBox(height: 166.0),
+                const CircleAvatarWidget(),
+                const SizedBox(height: 16),
+                BalanceWidget(balance: blocUserLedger.totalBalance),
+                const SizedBox(height: 65),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <SquareButtonWidget>[
+                    SquareButtonWidget(
+                      ontap: () => context.appManager.pageManager.push(
+                        IncomeView.pageModel,
+                      ),
+                      quarterTurns: 1,
+                      title: kIncomes,
+                      subtitle: blocUserLedger.incomesBalance,
                     ),
-                  );
-                },
-                icon: const Icon(Icons.remove),
-                label: const Text('Test toast warning'),
-              ),
-            ],
+                    SquareButtonWidget(
+                      ontap: () => context.appManager.pageManager.push(
+                        ExpensesView.pageModel,
+                      ),
+                      quarterTurns: 3,
+                      title: kExpenses,
+                      subtitle: blocUserLedger.expensesBalance,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: <SquareButtonWidget>[
+                    SquareButtonWidget(
+                      ontap: () => context.appManager.pageManager.push(
+                        MovementsView.pageModel,
+                      ),
+                      quarterTurns: 4,
+                      title: kMovements,
+                      subtitle: blocUserLedger.totalBalance,
+                    ),
+                    SquareButtonWidget(
+                      quarterTurns: 2,
+                      ontap: () {
+                        context.appManager.notifications.showToast(
+                          'Proximamente',
+                        );
+                      },
+                      title: 'Informes',
+                      subtitle: 'Subhead',
+                    ),
+                  ],
+                ),
+              ],
+            ),
           );
         },
       ), // This trailing comma makes auto-formatting nicer for build methods.

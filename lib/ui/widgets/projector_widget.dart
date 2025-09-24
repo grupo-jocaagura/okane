@@ -6,11 +6,13 @@ class ProjectorWidget extends StatelessWidget {
     this.designWidth = 412,
     this.designHeight = 892,
     super.key,
+    this.debug = false,
   });
 
   final Widget child;
   final double designWidth;
   final double designHeight;
+  final bool debug;
 
   @override
   Widget build(BuildContext context) {
@@ -33,11 +35,18 @@ class ProjectorWidget extends StatelessWidget {
             child: AspectRatio(
               aspectRatio: aspectRatio,
               child: FittedBox(
-                child: SizedBox(
-                  width: designWidth,
-                  height: designHeight,
-                  child: child,
-                ),
+                child: debug
+                    ? Container(
+                        color: Colors.amber,
+                        width: designWidth,
+                        height: designHeight,
+                        child: child,
+                      )
+                    : SizedBox(
+                        width: designWidth,
+                        height: designHeight,
+                        child: child,
+                      ),
               ),
             ),
           ),

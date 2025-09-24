@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jocaagura_domain/jocaagura_domain.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:okane/blocs/bloc_error_item.dart';
 import 'package:okane/blocs/bloc_user_ledger.dart';
@@ -52,11 +52,12 @@ void main() {
   });
 
   test('initialize actualiza el estado correctamente', () async {
-    when(() => getLedger.execute())
-        .thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
-    when(() => listenLedger.execute()).thenAnswer(
-      (_) => const Stream<Either<ErrorItem, LedgerModel>>.empty(),
-    );
+    when(
+      () => getLedger.execute(),
+    ).thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
+    when(
+      () => listenLedger.execute(),
+    ).thenAnswer((_) => const Stream<Either<ErrorItem, LedgerModel>>.empty());
 
     await bloc.initialize();
 
@@ -64,13 +65,17 @@ void main() {
   });
 
   test('initialize reporta errores correctamente', () async {
-    const ErrorItem error =
-        ErrorItem(title: 'fail', description: 'network', code: 'ERR');
-    when(() => getLedger.execute())
-        .thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
-    when(() => listenLedger.execute()).thenAnswer(
-      (_) => const Stream<Either<ErrorItem, LedgerModel>>.empty(),
+    const ErrorItem error = ErrorItem(
+      title: 'fail',
+      description: 'network',
+      code: 'ERR',
     );
+    when(
+      () => getLedger.execute(),
+    ).thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
+    when(
+      () => listenLedger.execute(),
+    ).thenAnswer((_) => const Stream<Either<ErrorItem, LedgerModel>>.empty());
 
     await bloc.initialize();
 
@@ -79,24 +84,31 @@ void main() {
   });
 
   test('addIncome actualiza el estado', () async {
-    when(() => addIncome.execute(any()))
-        .thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
+    when(
+      () => addIncome.execute(any()),
+    ).thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
 
-    final Either<ErrorItem, LedgerModel> result =
-        await bloc.addIncome(movement);
+    final Either<ErrorItem, LedgerModel> result = await bloc.addIncome(
+      movement,
+    );
 
     expect(result.isRight, true);
     expect(bloc.userLedger.nameOfLedger, 'test');
   });
 
   test('addExpense captura error y lo reporta', () async {
-    const ErrorItem error =
-        ErrorItem(title: 'fail', description: 'logic', code: 'FAIL');
-    when(() => addExpense.execute(any()))
-        .thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
+    const ErrorItem error = ErrorItem(
+      title: 'fail',
+      description: 'logic',
+      code: 'FAIL',
+    );
+    when(
+      () => addExpense.execute(any()),
+    ).thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
 
-    final Either<ErrorItem, LedgerModel> result =
-        await bloc.addExpense(movement);
+    final Either<ErrorItem, LedgerModel> result = await bloc.addExpense(
+      movement,
+    );
 
     expect(result.isLeft, true);
     expect(errorBloc.lastError.value?.code, 'FAIL');
