@@ -1,7 +1,7 @@
 name: okane
 description: "Interactive coach to help you manage your finances efficiently and clearly."
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-version: 1.9.0 #4
+version: 1.10.0
 
 environment:
   sdk: ^3.8.1
