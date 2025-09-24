@@ -1,69 +1,41 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
+
+import 'app/okane_app.dart';
+import 'config.dart';
+import 'ui/theme/global_theme.dart';
+import 'ui/views/splash_screen_view.dart';
+import 'ui/views/views.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    final String license = await rootBundle.loadString('google_fonts/OFL.txt');
+    yield LicenseEntryWithLineBreaks(<String>['google-fonts'], license);
+  });
+
+  runApp(
+    OkaneApp(
+      appManager: appManager,
+      registry: pageRegistry,
+      initialLocation: SplashScreenView.pageModel.toUriString(),
+      lightScheme: lightColorScheme,
+      darkScheme: darkColorScheme,
+      baseTextThemeBuilder: (ColorScheme scheme, double textScale) {
+        return GoogleFonts.robotoTextTheme()
+            .apply(displayColor: scheme.onSurface, bodyColor: scheme.onSurface)
+            .apply(fontSizeFactor: textScale);
+      },
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
-    );
+extension PageManagerDebugX on PageManager {
+  void debugLogStack([String tag = '']) {
+    final String chain = stack.pages.map((PageModel p) => p.name).join(' > ');
+    debugPrint('[STACK$tag] $chain');
   }
 }
