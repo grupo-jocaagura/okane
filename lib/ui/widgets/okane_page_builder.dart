@@ -22,10 +22,7 @@ class OkanePageBuilder extends StatelessWidget {
         final bool isLoading = appManager.loading.loadingMsg.isNotEmpty;
         return SafeArea(
           child: Scaffold(
-            appBar: AppBar(
-              title: Text(appManager.pageManager.currentTitle),
-              backgroundColor: Colors.transparent,
-            ),
+            appBar: AppBar(backgroundColor: Colors.transparent),
             body: Stack(
               children: <Widget>[
                 if (showWavyHeader) const WavyHeaderWidget(),
