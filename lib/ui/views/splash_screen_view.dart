@@ -39,7 +39,7 @@ class _SplashScreenViewState extends State<SplashScreenView> {
 
     final List<OnboardingStep> steps = <OnboardingStep>[
       OnboardingStep(
-        title: 'Verion 1.9.0',
+        title: 'Versión 1.11.0',
         autoAdvanceAfter: const Duration(seconds: 3),
         description: 'Inicializando',
         onEnter: () async => Right<ErrorItem, Unit>(Unit.value),
@@ -63,13 +63,11 @@ class _SplashScreenViewState extends State<SplashScreenView> {
       ),
     ];
 
-    // 1) Configurar y arrancar una sola vez.
     if (_onboarding.state.status == OnboardingStatus.idle) {
       _onboarding.configure(steps);
       _onboarding.start();
     }
 
-    // 2) Navegar una sola vez cuando termine (completed/skipped).
     _sub = _onboarding.stateStream.listen((OnboardingState s) {
       if (_navigated) {
         return;
