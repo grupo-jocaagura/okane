@@ -4,7 +4,7 @@ import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 import 'painters/bars_painter.dart';
 
 class BarsChartWidget extends StatelessWidget {
-  const BarsChartWidget({super.key, required this.graph});
+  const BarsChartWidget({required this.graph, super.key});
   final ModelGraph graph;
 
   @override
