@@ -26,6 +26,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+## [1.11.0] - 2025-09-28
+
+### Added
+- `ReportView` registered in `views.dart` and accesible desde `MyHomeView` mediante el botón **“Informes”**.
+- Gráficas en `ReportView`:
+    - `PieChartWidget` (gastos por categoría) con `PiePainter`.
+    - `BarsChartWidget` (gastos mensuales) con `BarsPainter`.
+    - `LegendWidget` para colores por categoría y totales.
+    - Render con `CustomPaint` (sin paquetes externos).
+- Constantes de UI:
+    - Mapa `categoryColors` para paleta consistente.
+- Seed de datos para desarrollo:
+    - `appManager` en `config.dart` ahora usa `AppEnvironment.dev`.
+    - `demoLedgerModel`, `defaultIncomeLedger2024`, `defaultExpenseLedger2024` en `fake_service_w_s_database.dart`.
+    - `FakeServiceWSDatabase` inicia con `demoLedgerModel`.
+
+### Changed
+- `OkanePageBuilder`: se elimina el título del `AppBar`; queda solo con fondo transparente.
+- `LedgerRepositoryImpl`: deserialización simplificada usando `LedgerModel.fromJson` (reemplaza `LedgerModelMapper.fromAnyMap`).
+
+### Fixed
+- `BlocIncomeForm.updateBaseCategories`: ahora sugiere categorías correctas según el flag `isIncome`.
+
+
 ## [1.10.0] - 2025-09-24
 
 ### Added

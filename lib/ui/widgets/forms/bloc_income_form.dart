@@ -25,10 +25,15 @@ class BlocIncomeForm extends BlocModule {
 
   void updateBaseCategories() {
     _baseCategories.clear();
-    _baseCategories = UtilsLedgerCategory.uniqueIncomeCategories(
-      _ledger.userLedger,
-      categoryOf: (FinancialMovementModel m) => m.category,
-    );
+    _baseCategories = isIncome
+        ? UtilsLedgerCategory.uniqueIncomeCategories(
+            _ledger.userLedger,
+            categoryOf: (FinancialMovementModel m) => m.category,
+          )
+        : UtilsLedgerCategory.uniqueExpenseCategories(
+            _ledger.userLedger,
+            categoryOf: (FinancialMovementModel m) => m.category,
+          );
   }
 
   // Streams para la vista

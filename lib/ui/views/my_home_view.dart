@@ -12,6 +12,7 @@ import '../widgets/square_button_widget.dart';
 import 'expenses_view.dart';
 import 'income_view.dart';
 import 'movements_view.dart';
+import 'report_view.dart';
 
 class MyHomeView extends StatelessWidget {
   const MyHomeView({super.key});
@@ -82,11 +83,9 @@ class MyHomeView extends StatelessWidget {
                     ),
                     SquareButtonWidget(
                       quarterTurns: 2,
-                      ontap: () {
-                        context.appManager.notifications.showToast(
-                          'Proximamente',
-                        );
-                      },
+                      ontap: () => context.appManager.pageManager.push(
+                        ReportView.pageModel,
+                      ),
                       title: 'Informes',
                       subtitle: 'Subhead',
                     ),
