@@ -43,3 +43,12 @@ const Map<int, String> kMonths = <int, String>{
   10: 'noviembre',
   11: 'diciembre',
 };
+
+final Map<String, Color> categoryColors = <String, Color>{
+  'Mercado': const Color(0xFFFFD54F),
+  'Transporte': const Color(0xFF90CAF9),
+  'Entretenimiento': const Color(0xFFF48FB1),
+  'Servicios': const Color(0xFFA5D6A7),
+  'Arriendo': const Color(0xFFB39DDB),
+  'Otros': const Color(0xFFFFAB91),
+};

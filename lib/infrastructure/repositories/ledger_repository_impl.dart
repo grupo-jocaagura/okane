@@ -4,7 +4,6 @@ import '../../blocs/bloc_user_ledger.dart';
 import '../../domain/errors/financial_error_items.dart';
 import '../../domain/gateway/ledger_ws_gateway.dart';
 import '../../domain/repositories/ledger_reporitory.dart';
-import '../mappers/ldger_model_mapper.dart';
 
 class LedgerRepositoryImpl implements LedgerRepository {
   LedgerRepositoryImpl(this._gateway);
@@ -143,7 +142,7 @@ class LedgerRepositoryImpl implements LedgerRepository {
         },
         (Map<String, dynamic> json) {
           try {
-            final LedgerModel model = LedgerModelMapper.fromAnyMap(json);
+            final LedgerModel model = LedgerModel.fromJson(json);
             return Right<ErrorItem, LedgerModel>(model);
           } catch (_) {
             return Left<ErrorItem, LedgerModel>(

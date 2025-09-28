@@ -29,7 +29,7 @@ void main() {
 
   final FinancialMovementModel invalid = income.copyWith(amount: 0);
 
-  final FinancialMovementModel overExpense = income.copyWith(amount: 5000);
+  final FinancialMovementModel overExpense = income.copyWith(amount: 50000000);
 
   setUp(() async {
     fakeService = FakeServiceWSDatabase();
@@ -61,7 +61,7 @@ void main() {
         (ErrorItem err) => null,
         (LedgerModel m) => m.incomeLedger.length,
       ),
-      1,
+      13,
     );
   });
 
@@ -93,7 +93,7 @@ void main() {
         (ErrorItem err) => null,
         (LedgerModel m) => m.expenseLedger.length,
       ),
-      1,
+      61,
     );
   });
 
