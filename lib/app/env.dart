@@ -117,9 +117,21 @@ class BlocFactory {
 /// final AppConfig config = Env.build(AppEnvironment.dev);
 /// runApp(OkaneApp(appManager: AppManager(config), registry: pageRegistry));
 /// ```
-class Env {
+class OkaneEnv extends Env {
+  const OkaneEnv({
+    required this.bindings,
+    String? modeTest,
+  }) : super(modeTest);
+
+  final EnvBindings bindings;
+
   static AppConfig build(AppEnvironment env) {
-    final EnvBindings bindings = EnvBindings.forEnv(env);
+    final OkaneEnv okaneEnv = OkaneEnv(bindings: EnvBindings.forEnv(env));
+
+    return okaneEnv._build();
+  }
+
+  AppConfig _build() {
     const GatewayFactory gateways = GatewayFactory();
     const RepositoryFactory repositories = RepositoryFactory();
     const BlocFactory blocs = BlocFactory();

@@ -81,8 +81,8 @@ class BlocIncomeForm extends BlocModule {
     onAmountChangedAttempt(amount.value);
     onCategoryChangedAttempt(category.value);
     if (!isValid) {
-      return Left<ErrorItem, LedgerModel>(
-        const ErrorItem(
+      return const Left<ErrorItem, LedgerModel>(
+        ErrorItem(
           title: 'Formulario inválido',
           code: 'NotValidForm',
           description: 'Formulario inválido',

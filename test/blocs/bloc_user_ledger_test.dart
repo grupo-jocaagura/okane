@@ -54,7 +54,7 @@ void main() {
   test('initialize actualiza el estado correctamente', () async {
     when(
       () => getLedger.execute(),
-    ).thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
+    ).thenAnswer((_) async => const Right<ErrorItem, LedgerModel>(fakeLedger));
     when(
       () => listenLedger.execute(),
     ).thenAnswer((_) => const Stream<Either<ErrorItem, LedgerModel>>.empty());
@@ -72,7 +72,7 @@ void main() {
     );
     when(
       () => getLedger.execute(),
-    ).thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
+    ).thenAnswer((_) async => const Left<ErrorItem, LedgerModel>(error));
     when(
       () => listenLedger.execute(),
     ).thenAnswer((_) => const Stream<Either<ErrorItem, LedgerModel>>.empty());
@@ -86,7 +86,7 @@ void main() {
   test('addIncome actualiza el estado', () async {
     when(
       () => addIncome.execute(any()),
-    ).thenAnswer((_) async => Right<ErrorItem, LedgerModel>(fakeLedger));
+    ).thenAnswer((_) async => const Right<ErrorItem, LedgerModel>(fakeLedger));
 
     final Either<ErrorItem, LedgerModel> result = await bloc.addIncome(
       movement,
@@ -104,7 +104,7 @@ void main() {
     );
     when(
       () => addExpense.execute(any()),
-    ).thenAnswer((_) async => Left<ErrorItem, LedgerModel>(error));
+    ).thenAnswer((_) async => const Left<ErrorItem, LedgerModel>(error));
 
     final Either<ErrorItem, LedgerModel> result = await bloc.addExpense(
       movement,
