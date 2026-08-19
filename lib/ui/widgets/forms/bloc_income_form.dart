@@ -12,6 +12,7 @@ class BlocIncomeForm extends BlocModule {
   final BlocUserLedger _ledger;
 
   final bool isIncome;
+  final BlocGeneral<bool> _amountEditing = BlocGeneral<bool>(false);
 
   // Estados controlados por la UI
   final BlocGeneral<FieldState> _amount = BlocGeneral<FieldState>(
@@ -39,7 +40,9 @@ class BlocIncomeForm extends BlocModule {
   // Streams para la vista
   Stream<FieldState> get amountStream => _amount.stream;
   Stream<FieldState> get categoryStream => _category.stream;
+  Stream<bool> get amountEditingStream => _amountEditing.stream;
 
+  bool get isAmountEditing => _amountEditing.value;
   FieldState get amount => _amount.value;
   FieldState get category => _category.value;
 
@@ -51,6 +54,57 @@ class BlocIncomeForm extends BlocModule {
         ? 'Ingresa un monto válido mayor que 0'
         : null;
     _amount.value = FieldState(clean, errorText: error);
+  }
+
+  void startAmountEditing() {
+    _amountEditing.value = true;
+  }
+
+  void stopAmountEditing() {
+    _amountEditing.value = false;
+  }
+
+  void appendAmountDigit(int digit) {
+    if (digit < 0 || digit > 9) {
+      throw ArgumentError.value(
+        digit,
+        'digit',
+        'Amount digit must be between 0 and 9',
+      );
+    }
+
+    final String current = amount.value;
+
+    final String candidate;
+
+    if (current.isEmpty) {
+      candidate = '$digit';
+    } else if (current == '0') {
+      candidate = digit == 0 ? '0' : '$digit';
+    } else {
+      candidate = '$current$digit';
+    }
+
+    onAmountChangedAttempt(candidate);
+  }
+
+  void removeLastAmountDigit() {
+    final String current = amount.value;
+
+    if (current.isEmpty || current.length == 1) {
+      onAmountChangedAttempt('');
+      return;
+    }
+
+    onAmountChangedAttempt(current.substring(0, current.length - 1));
+  }
+
+  void confirmAmountEditing() {
+    onAmountChangedAttempt(amount.value);
+
+    if (isAmountValid) {
+      stopAmountEditing();
+    }
   }
 
   void onCategoryChangedAttempt(String raw) {
@@ -73,9 +127,10 @@ class BlocIncomeForm extends BlocModule {
     return OkaneFormatter.moneyFormatter(d);
   }
 
+  bool get isAmountValid => amount.errorText == null && amount.value.isNotEmpty;
+
   bool get isValid =>
-      (amount.errorText == null && amount.value.isNotEmpty) &&
-      (category.errorText == null && category.value.isNotEmpty);
+      isAmountValid && category.errorText == null && category.value.isNotEmpty;
 
   Future<Either<ErrorItem, LedgerModel>> submit() async {
     onAmountChangedAttempt(amount.value);
@@ -111,5 +166,6 @@ class BlocIncomeForm extends BlocModule {
   void dispose() {
     _amount.dispose();
     _category.dispose();
+    _amountEditing.dispose();
   }
 }

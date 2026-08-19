@@ -16,9 +16,9 @@ AppEnvironment resolveOkaneEnvironment(String rawValue) {
     default:
       throw StateError(
         '$kOkaneEnvironmentDefine is required and must be one of: '
-            'dev, qa, prod. '
-            'Launch Okane with '
-            '--dart-define=$kOkaneEnvironmentDefine=<dev|qa|prod>.',
+        'dev, qa, prod. '
+        'Launch Okane with '
+        '--dart-define=$kOkaneEnvironmentDefine=<dev|qa|prod>.',
       );
   }
 }

@@ -118,10 +118,7 @@ class BlocFactory {
 /// runApp(OkaneApp(appManager: AppManager(config), registry: pageRegistry));
 /// ```
 class OkaneEnv extends Env {
-  const OkaneEnv({
-    required this.bindings,
-    String? modeTest,
-  }) : super(modeTest);
+  const OkaneEnv({required this.bindings, String? modeTest}) : super(modeTest);
 
   final EnvBindings bindings;
 

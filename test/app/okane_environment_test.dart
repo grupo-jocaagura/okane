@@ -5,43 +5,28 @@ import 'package:okane/app/okane_environment.dart';
 void main() {
   group('resolveOkaneEnvironment', () {
     test('resolves dev', () {
-      expect(
-        resolveOkaneEnvironment('dev'),
-        AppEnvironment.dev,
-      );
+      expect(resolveOkaneEnvironment('dev'), AppEnvironment.dev);
     });
 
     test('resolves qa', () {
-      expect(
-        resolveOkaneEnvironment('qa'),
-        AppEnvironment.qa,
-      );
+      expect(resolveOkaneEnvironment('qa'), AppEnvironment.qa);
     });
 
     test('resolves prod', () {
-      expect(
-        resolveOkaneEnvironment('prod'),
-        AppEnvironment.prod,
-      );
+      expect(resolveOkaneEnvironment('prod'), AppEnvironment.prod);
     });
 
     test('normalizes case and surrounding whitespace', () {
-      expect(
-        resolveOkaneEnvironment('  DEV  '),
-        AppEnvironment.dev,
-      );
+      expect(resolveOkaneEnvironment('  DEV  '), AppEnvironment.dev);
     });
 
     test('fails when value is empty', () {
-      expect(
-            () => resolveOkaneEnvironment(''),
-        throwsA(isA<StateError>()),
-      );
+      expect(() => resolveOkaneEnvironment(''), throwsA(isA<StateError>()));
     });
 
     test('fails when value is unknown', () {
       expect(
-            () => resolveOkaneEnvironment('staging'),
+        () => resolveOkaneEnvironment('staging'),
         throwsA(isA<StateError>()),
       );
     });
