@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:jocaaguraarchetype/jocaaguraarchetype.dart';
 
 import '../../config.dart';
-import 'projector_widget.dart';
 import 'wavy_header_widget.dart';
 
 class OkanePageBuilder extends StatelessWidget {

@@ -26,6 +26,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
+## [1.11.1] - 2026-08-19
+
+Added
+
+- Added controlled virtual amount input for income and expense forms.
+- Added "VirtualKeyWidget" as an accessible primitive for virtual keyboard actions.
+- Added "VirtualAmountKeyboardWidget" for digit-only monetary input.
+- Added "AmountMagnifierWidget" with live formatted amount preview.
+- Added explicit amount-editing intents and state management in "BlocIncomeForm".
+- Added widget and integration coverage for the complete controlled amount-entry flow.
+- Added explicit runtime environment selection through "--dart-define=OKANE_ENV=<dev|qa|prod>".
+
+Changed
+
+- Updated project dependencies to their latest compatible versions.
+- Updated Android Gradle, Android Gradle Plugin and Kotlin tooling for compatibility with the current Flutter SDK.
+- Migrated Okane to use the transversal "ProjectorWidget" provided by "jocaaguraarchetype".
+- Changed the local environment implementation to "OkaneEnv extends Env".
+- Amount entry now stores only canonical numeric digits while Okane controls monetary presentation.
+- Monetary preview preserves the current Colombian accounting representation with two decimal places.
+- "FormLedgerWidget" now resolves "AppManager" from the application context instead of the global composition root.
+
+Fixed
+
+- Removed "Env" and "ProjectorWidget" symbol collisions introduced by the Archetype dependency upgrade.
+- Prevented the native keyboard from interfering with controlled monetary input.
+- Preserved amount values when closing and reopening the virtual amount editor.
+
+Quality
+
+- Expanded the automated suite to 97 passing tests.
+- Added coverage for amount sanitization, formatting, virtual-key interactions, accessibility semantics and income/expense integration.
 ## [1.11.0] - 2025-09-28
 
 ### Added

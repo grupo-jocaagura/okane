@@ -40,8 +40,8 @@ class HiveServiceWSDatabase implements ServiceWSDatabase {
 
   final BlocGeneral<Either<ErrorItem, Map<String, dynamic>>> _streamBloc =
       BlocGeneral<Either<ErrorItem, Map<String, dynamic>>>(
-        Left<ErrorItem, Map<String, dynamic>>(
-          const ErrorItem(
+        const Left<ErrorItem, Map<String, dynamic>>(
+          ErrorItem(
             title: 'Boot',
             code: 'BOOT',
             description: 'Stream not initialized yet',
