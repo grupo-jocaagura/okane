@@ -5,18 +5,14 @@ class AmountMagnifierWidget extends StatelessWidget {
     required this.formattedAmount,
     required this.visible,
     super.key,
-    this.padding = const EdgeInsets.symmetric(
-      horizontal: 18,
-      vertical: 12,
-    ),
+    this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
   });
 
   final String formattedAmount;
   final bool visible;
   final EdgeInsets padding;
 
-  static const Duration _animationDuration =
-  Duration(milliseconds: 180);
+  static const Duration _animationDuration = Duration(milliseconds: 180);
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +21,7 @@ class AmountMagnifierWidget extends StatelessWidget {
 
     final RoundedRectangleBorder shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: BorderSide(
-        color: colors.outlineVariant,
-      ),
+      side: BorderSide(color: colors.outlineVariant),
     );
 
     return IgnorePointer(
@@ -57,8 +51,7 @@ class AmountMagnifierWidget extends StatelessWidget {
                         child: Text(
                           formattedAmount,
                           maxLines: 1,
-                          style:
-                          theme.textTheme.headlineMedium?.copyWith(
+                          style: theme.textTheme.headlineMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.2,
                           ),

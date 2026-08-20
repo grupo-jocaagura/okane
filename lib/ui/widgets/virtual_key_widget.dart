@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum VirtualKeyVariant {
-  neutral,
-  secondary,
-  primary,
-}
+enum VirtualKeyVariant { neutral, secondary, primary }
 
 class VirtualKeyWidget extends StatelessWidget {
   const VirtualKeyWidget({
@@ -44,9 +40,7 @@ class VirtualKeyWidget extends StatelessWidget {
     final RoundedRectangleBorder shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(_borderRadius),
       side: variant == VirtualKeyVariant.neutral
-          ? BorderSide(
-        color: colors.outlineVariant,
-      )
+          ? BorderSide(color: colors.outlineVariant)
           : BorderSide.none,
     );
 
@@ -65,18 +59,14 @@ class VirtualKeyWidget extends StatelessWidget {
           customBorder: shape,
           child: Center(
             child: icon != null
-                ? Icon(
-              icon,
-              color: foregroundColor,
-              size: 24,
-            )
+                ? Icon(icon, color: foregroundColor, size: 24)
                 : Text(
-              label,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: foregroundColor,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+                    label,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: foregroundColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
           ),
         ),
       ),

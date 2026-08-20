@@ -79,10 +79,7 @@ class VirtualAmountKeyboardWidget extends StatelessWidget {
 }
 
 class _DigitRow extends StatelessWidget {
-  const _DigitRow({
-    required this.digits,
-    required this.onDigitPressed,
-  });
+  const _DigitRow({required this.digits, required this.onDigitPressed});
 
   final List<int> digits;
   final ValueChanged<int> onDigitPressed;
@@ -93,9 +90,7 @@ class _DigitRow extends StatelessWidget {
       children: <Widget>[
         for (int index = 0; index < digits.length; index++) ...<Widget>[
           if (index > 0)
-            const SizedBox(
-              width: VirtualAmountKeyboardWidget._spacing,
-            ),
+            const SizedBox(width: VirtualAmountKeyboardWidget._spacing),
           Expanded(
             child: VirtualKeyWidget(
               label: '${digits[index]}',
