@@ -5,18 +5,30 @@ class AmountMagnifierWidget extends StatelessWidget {
     required this.formattedAmount,
     required this.visible,
     super.key,
-    this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+    this.padding = const EdgeInsets.symmetric(
+      horizontal: 18,
+      vertical: 12,
+    ),
   });
 
   final String formattedAmount;
   final bool visible;
   final EdgeInsets padding;
 
-  static const Duration _animationDuration = Duration(milliseconds: 180);
+  static const Duration _animationDuration =
+  Duration(milliseconds: 180);
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+
+    final RoundedRectangleBorder shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(
+        color: colors.outlineVariant,
+      ),
+    );
 
     return IgnorePointer(
       child: AnimatedOpacity(
@@ -31,17 +43,26 @@ class AmountMagnifierWidget extends StatelessWidget {
               container: true,
               label: 'Cantidad formateada',
               value: formattedAmount,
-              child: Card(
-                elevation: 4,
-                color: theme.colorScheme.surfaceContainerHigh,
+              child: Material(
+                color: colors.surfaceContainerHighest,
+                elevation: 1,
+                shape: shape,
                 child: Padding(
                   padding: padding,
                   child: ExcludeSemantics(
-                    child: Text(
-                      formattedAmount,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          formattedAmount,
+                          maxLines: 1,
+                          style:
+                          theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
                       ),
                     ),
                   ),
