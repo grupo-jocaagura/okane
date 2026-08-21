@@ -32,12 +32,19 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
+      - name: Start validation timer
+        id: timer
+        shell: bash
+        run: |
+          echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Check commit signatures
+        id: commits
         shell: bash
         run: |
           set -euo pipefail
@@ -57,8 +64,7 @@ jobs:
             before="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH")"
             after="$(jq -r '.after // empty' "$GITHUB_EVENT_PATH")"
 
-            # Caso normal: validar exactamente los commits introducidos
-            # por el push.
+            # Normal push: validate exactly the commits introduced by the push.
             if [[ -n "$before" && -n "$after" && ! "$before" =~ ^0+$ ]]; then
               curl -sSf \
                 -H "Authorization: Bearer ${GH_TOKEN}" \
@@ -69,8 +75,7 @@ jobs:
               return 0
             fi
 
-            # Fallback para pushes donde before es cero, por ejemplo
-            # creación inicial de una rama.
+            # Branch creation or other pushes where before is the zero SHA.
             local payload_commits
 
             payload_commits="$(
@@ -83,7 +88,7 @@ jobs:
               return 0
             fi
 
-            # Último fallback: al menos validar el commit final.
+            # Last fallback: validate at least the resulting commit.
             if [[ -n "$after" ]]; then
               printf '%s\n' "$after"
               return 0
@@ -108,8 +113,6 @@ jobs:
               return 1
             fi
 
-            # La misma política de firmas se aplica a los commits
-            # introducidos por el PR.
             curl -sSf \
               -H "Authorization: Bearer ${GH_TOKEN}" \
               -H "Accept: application/vnd.github+json" \
@@ -164,8 +167,15 @@ jobs:
               continue
             fi
 
-            VERIFIED="$(printf '%s' "$RESP" | jq -r '.commit.verification.verified')"
-            REASON="$(printf '%s' "$RESP" | jq -r '.commit.verification.reason')"
+            VERIFIED="$(
+              printf '%s' "$RESP" \
+                | jq -r '.commit.verification.verified'
+            )"
+
+            REASON="$(
+              printf '%s' "$RESP" \
+                | jq -r '.commit.verification.reason'
+            )"
 
             if [[ "$VERIFIED" != "true" ]]; then
               echo "::error title=Unsigned/Unverified commit::${SHA} verified=false (reason=${REASON})"
@@ -177,6 +187,9 @@ jobs:
           done <<< "$SHAS"
 
           echo "Checked commits: ${checked_count}"
+
+          echo "checked=${checked_count}" >> "$GITHUB_OUTPUT"
+          echo "failed=${failed_count}" >> "$GITHUB_OUTPUT"
 
           if [[ "$fail" == "true" ]]; then
             echo "::error title=Commit signature check failed::${failed_count} commit(s) unsigned or unverified."
@@ -190,8 +203,8 @@ jobs:
           cache: true
           cache-sdk: true
 
-
       - name: Discover tracked Dart and Flutter packages
+        id: packages
         shell: bash
         run: |
           set -euo pipefail
@@ -208,15 +221,23 @@ jobs:
             exit 1
           fi
 
+          PACKAGE_COUNT="$(
+            wc -l < "$PACKAGE_FILE" \
+              | tr -d '[:space:]'
+          )"
+
+          echo "count=${PACKAGE_COUNT}" >> "$GITHUB_OUTPUT"
+
           echo "Tracked packages:"
 
           while IFS= read -r pubspec; do
             echo "  - $(dirname "$pubspec")"
           done < "$PACKAGE_FILE"
 
-          echo "Package count: $(wc -l < "$PACKAGE_FILE" | tr -d ' ')"
+          echo "Package count: ${PACKAGE_COUNT}"
 
       - name: Pub get
+        id: pub_get
         shell: bash
         run: |
           set -euo pipefail
@@ -236,6 +257,7 @@ jobs:
           done < "$PACKAGE_FILE"
 
       - name: Check dependency_overrides
+        id: overrides
         shell: bash
         run: |
           set -euo pipefail
@@ -258,6 +280,7 @@ jobs:
           echo "✓ No dependency_overrides found"
 
       - name: Enforce dart format
+        id: format
         shell: bash
         run: |
           set -euo pipefail
@@ -268,6 +291,7 @@ jobs:
             .
 
       - name: Dart analyze
+        id: analyze
         shell: bash
         run: |
           set -euo pipefail
@@ -289,3 +313,91 @@ jobs:
                 .
             )
           done < "$PACKAGE_FILE"
+
+      - name: Write base validation summary
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          STARTED_AT: ${{ steps.timer.outputs.started_at }}
+
+          COMMITS_CHECKED: ${{ steps.commits.outputs.checked }}
+          PACKAGES_CHECKED: ${{ steps.packages.outputs.count }}
+
+          COMMITS_OUTCOME: ${{ steps.commits.outcome }}
+          PUB_GET_OUTCOME: ${{ steps.pub_get.outcome }}
+          OVERRIDES_OUTCOME: ${{ steps.overrides.outcome }}
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+
+        run: |
+          set -euo pipefail
+
+          result() {
+            case "${1:-}" in
+              success)
+                printf '✅ PASS'
+                ;;
+              failure)
+                printf '❌ FAIL'
+                ;;
+              cancelled)
+                printf '⚪ CANCELLED'
+                ;;
+              skipped)
+                printf '⏭️ SKIPPED'
+                ;;
+              *)
+                printf 'N/A'
+                ;;
+            esac
+          }
+
+          value_or_na() {
+            local value="${1:-}"
+
+            if [[ -z "$value" ]]; then
+              printf 'N/A'
+            else
+              printf '%s' "$value"
+            fi
+          }
+
+          finished_at="$(date +%s)"
+          duration="N/A"
+
+          if [[ "${STARTED_AT:-}" =~ ^[0-9]+$ ]]; then
+            duration="$((finished_at - STARTED_AT))s"
+          fi
+
+          case "${JOB_STATUS:-}" in
+            success)
+              overall='✅ PASS'
+              ;;
+            failure)
+              overall='❌ FAIL'
+              ;;
+            cancelled)
+              overall='⚪ CANCELLED'
+              ;;
+            *)
+              overall='N/A'
+              ;;
+          esac
+
+          {
+            echo "## Flutter Base Validation"
+            echo ""
+            echo "**Status:** ${overall}"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | ---: |"
+            echo "| Commits checked | $(value_or_na "${COMMITS_CHECKED:-}") |"
+            echo "| Commit signatures | $(result "${COMMITS_OUTCOME:-}") |"
+            echo "| Packages checked | $(value_or_na "${PACKAGES_CHECKED:-}") |"
+            echo "| Dependencies | $(result "${PUB_GET_OUTCOME:-}") |"
+            echo "| dependency_overrides | $(result "${OVERRIDES_OUTCOME:-}") |"
+            echo "| Dart format | $(result "${FORMAT_OUTCOME:-}") |"
+            echo "| Strict analyze | $(result "${ANALYZE_OUTCOME:-}") |"
+            echo "| Duration | ${duration} |"
+          } >> "$GITHUB_STEP_SUMMARY"
