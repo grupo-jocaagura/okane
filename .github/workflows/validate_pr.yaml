@@ -197,49 +197,55 @@ jobs:
 
             if [[ -s "$machine_file" ]]; then
               package_passed="$(
-                jq -s '
-                  [
-                    .[]
-                    | select(
-                        .type == "testDone"
-                        and (.hidden != true)
-                        and (.skipped != true)
-                        and .result == "success"
-                      )
-                  ]
+                jq -R -s '
+                  split("\n")
+                  | map(fromjson? // empty)
+                  | flatten
+                  | [
+                      .[]
+                      | select(type == "object")
+                      | select(.type == "testDone")
+                      | select(.hidden != true)
+                      | select(.skipped != true)
+                      | select(.result == "success")
+                    ]
                   | length
-                ' "$machine_file" 2>/dev/null || echo 0
+                ' "$machine_file"
               )"
 
               package_failed="$(
-                jq -s '
-                  [
-                    .[]
-                    | select(
-                        .type == "testDone"
-                        and (.hidden != true)
-                        and (
+                jq -R -s '
+                  split("\n")
+                  | map(fromjson? // empty)
+                  | flatten
+                  | [
+                      .[]
+                      | select(type == "object")
+                      | select(.type == "testDone")
+                      | select(.hidden != true)
+                      | select(
                           .result == "failure"
                           or .result == "error"
                         )
-                      )
-                  ]
+                    ]
                   | length
-                ' "$machine_file" 2>/dev/null || echo 0
+                ' "$machine_file"
               )"
 
               package_skipped="$(
-                jq -s '
-                  [
-                    .[]
-                    | select(
-                        .type == "testDone"
-                        and (.hidden != true)
-                        and (.skipped == true)
-                      )
-                  ]
+                jq -R -s '
+                  split("\n")
+                  | map(fromjson? // empty)
+                  | flatten
+                  | [
+                      .[]
+                      | select(type == "object")
+                      | select(.type == "testDone")
+                      | select(.hidden != true)
+                      | select(.skipped == true)
+                    ]
                   | length
-                ' "$machine_file" 2>/dev/null || echo 0
+                ' "$machine_file"
               )"
             fi
 
@@ -269,8 +275,11 @@ jobs:
               if [[ -s "$machine_file" ]]; then
                 echo "::group::Test errors - ${directory}"
 
-                jq -r '
-                  select(.type == "error")
+                jq -R -r '
+                  fromjson?
+                  | if type == "array" then .[] else . end
+                  | select(type == "object")
+                  | select(.type == "error")
                   | (.error // empty),
                     (.stackTrace // empty)
                 ' "$machine_file" || true
