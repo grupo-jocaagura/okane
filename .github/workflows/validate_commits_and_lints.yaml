@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -192,14 +192,6 @@ jobs:
 
       - name: Flutter doctor
         run: flutter doctor -v
-
-      - name: Cache pub
-        uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock', '**/pubspec.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pub-
 
       - name: Discover tracked Dart and Flutter packages
         shell: bash
