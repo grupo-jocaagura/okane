@@ -1,4 +1,4 @@
-name: Validate PR and Update Version
+name: Validate PR
 
 on:
   pull_request:
@@ -6,129 +6,488 @@ on:
       - develop
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  validate_and_update:
-    name: Validate PR to develop
-    runs-on: ubuntu-latest
+  base_validation:
+    name: Base validation
     if: >
-      github.event_name == 'pull_request' &&
       github.actor != 'github-actions[bot]' &&
       !contains(github.event.pull_request.title, '[skip ci]')
+    uses: ./.github/workflows/validate_commits_and_lints.yaml
+
+  test_and_coverage:
+    name: Tests & coverage
+    needs:
+      - base_validation
+    if: >
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.pull_request.title, '[skip ci]') &&
+      needs.base_validation.result == 'success'
+    runs-on: ubuntu-latest
+
+    env:
+      COVERAGE_MIN: ${{ vars.COVERAGE_MIN }}
+
+    outputs:
+      packages_discovered: ${{ steps.packages.outputs.count }}
+      packages_tested: ${{ steps.tests.outputs.packages_tested }}
+      tests_total: ${{ steps.tests.outputs.total }}
+      tests_passed: ${{ steps.tests.outputs.passed }}
+      tests_failed: ${{ steps.tests.outputs.failed }}
+      tests_skipped: ${{ steps.tests.outputs.skipped }}
+      tests_duration: ${{ steps.tests.outputs.duration }}
+      tests_status: ${{ steps.tests.outputs.status }}
+      line_coverage: ${{ steps.coverage.outputs.line_coverage }}
+      coverage_gate: ${{ steps.coverage.outputs.gate }}
 
     steps:
-      - name: Ensure PR targets develop branch
-        run: |
-          if [[ "${{ github.base_ref }}" != "develop" ]]; then
-            echo "❌ This PR must be based on 'develop'. Current base: ${{ github.base_ref }}"
-            exit 1
-          fi
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: Validate Changelog Update
-        run: |
-          if ! git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -q CHANGELOG.md; then
-            echo "❌ CHANGELOG.md must be updated in this PR."
-            exit 1
-          fi
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Check Formatting (read-only)
-        run: dart format --output=none --set-exit-if-changed .
-
-      - name: Analyze Code
-        run: flutter analyze
-
-      - name: Run Tests
-        run: flutter test
-
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Configure SSH Signing Key
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_SIGNING_KEY }}" > ~/.ssh/commit_signing_key
-          chmod 600 ~/.ssh/commit_signing_key
-          eval $(ssh-agent -s)
-          ssh-add ~/.ssh/commit_signing_key
-          ssh-keygen -y -f ~/.ssh/commit_signing_key > ~/.ssh/commit_signing_key.pub
-          git config --global user.name "${{ secrets.BOT_NAME }}"
-          git config --global user.email "${{ secrets.BOT_EMAIL }}"
-          git config --global user.signingkey ~/.ssh/commit_signing_key
-          git config --global commit.gpgsign true
-          git config --global gpg.format ssh
-
-      - name: Increment Version Based on Label (same-repo PRs)
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate coverage configuration
+        shell: bash
         run: |
           set -euo pipefail
 
-          CURRENT_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
-          echo "Current version: $CURRENT_VERSION"
-
-          LABELS_RESPONSE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels")
-
-          LABELS=$(echo "$LABELS_RESPONSE" | jq -r '.[].name')
-
-          if echo "$LABELS" | grep -q "major"; then
-            UPDATED_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{$1+=1; $2=0; $3=0}1' OFS=".")
-          elif echo "$LABELS" | grep -q "minor"; then
-            UPDATED_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{$2+=1; $3=0}1' OFS=".")
-          elif echo "$LABELS" | grep -q "patch"; then
-            UPDATED_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{$3+=1}1' OFS=".")
-          else
-            echo "❌ No version label found. Please add 'major', 'minor', or 'patch'."
+          if [[ -z "${COVERAGE_MIN//[[:space:]]/}" ]]; then
+            echo "::error title=Missing COVERAGE_MIN::Configure the repository Actions variable COVERAGE_MIN."
             exit 1
           fi
 
-          echo "Updated version: $UPDATED_VERSION"
-          sed -i "s/^version:.*/version: $UPDATED_VERSION/" pubspec.yaml
+          if ! [[ "$COVERAGE_MIN" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "::error title=Invalid COVERAGE_MIN::COVERAGE_MIN must be a numeric percentage between 0 and 100."
+            exit 1
+          fi
 
-          git add pubspec.yaml
-          # 👇 Importante: [skip ci] para evitar disparar workflows de push
-          git commit -S -m "chore(version): bump to $UPDATED_VERSION [skip ci]"
+          if ! awk -v value="$COVERAGE_MIN" \
+            'BEGIN { exit !(value >= 0 && value <= 100) }'; then
+            echo "::error title=Invalid COVERAGE_MIN::COVERAGE_MIN must be between 0 and 100."
+            exit 1
+          fi
 
-      - name: Sync PR branch and push with retry (same-repo PRs)
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          echo "Coverage threshold: ${COVERAGE_MIN}%"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: flutter-actions/setup-flutter@v4
+        with:
+          channel: stable
+          cache: true
+          cache-sdk: true
+
+      - name: Discover tracked Dart and Flutter packages
+        id: packages
+        shell: bash
         run: |
-          set -e
-          BRANCH="${{ github.head_ref }}"
-          git config --global rebase.gpgSign true
+          set -euo pipefail
 
-          for i in 1 2 3; do
-            git fetch origin "$BRANCH"
-            git pull --rebase origin "$BRANCH" || true
-            if git push; then
-              echo "✅ Push OK"
-              exit 0
+          PACKAGE_FILE="${RUNNER_TEMP}/tracked_pubspecs.txt"
+
+          git ls-files \
+            | grep -E '(^|/)pubspec\.yaml$' \
+            | grep -Ev '(^|/)(build|\.dart_tool)/' \
+            > "$PACKAGE_FILE" || true
+
+          if [[ ! -s "$PACKAGE_FILE" ]]; then
+            echo "::error title=No packages found::No tracked pubspec.yaml files were found."
+            exit 1
+          fi
+
+          PACKAGE_COUNT="$(
+            wc -l < "$PACKAGE_FILE" |
+              tr -d '[:space:]'
+          )"
+
+          echo "count=${PACKAGE_COUNT}" >> "$GITHUB_OUTPUT"
+
+          echo "Tracked packages:"
+
+          while IFS= read -r pubspec; do
+            echo "  - $(dirname "$pubspec")"
+          done < "$PACKAGE_FILE"
+
+      - name: Pub get
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PACKAGE_FILE="${RUNNER_TEMP}/tracked_pubspecs.txt"
+
+          while IFS= read -r pubspec; do
+            directory="$(dirname "$pubspec")"
+
+            echo ""
+            echo ">> flutter pub get: ${directory}"
+
+            (
+              cd "$directory"
+              flutter pub get
+            )
+          done < "$PACKAGE_FILE"
+
+      - name: Run tests with coverage
+        id: tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+          PACKAGE_FILE="${RUNNER_TEMP}/tracked_pubspecs.txt"
+          COVERAGE_FILE_LIST="${RUNNER_TEMP}/coverage_files.txt"
+
+          : > "$COVERAGE_FILE_LIST"
+
+          packages_tested=0
+          total=0
+          passed=0
+          failed=0
+          skipped=0
+          tests_failed=false
+
+          started_at="$(date +%s)"
+
+          while IFS= read -r pubspec; do
+            directory="$(dirname "$pubspec")"
+
+            if [[ ! -d "${directory}/test" ]]; then
+              echo "::notice title=Tests skipped::${directory} has no test directory."
+              continue
             fi
-            echo "🔁 Reintentando ($i/3)..."
-            sleep $((i*2))
-          done
-          echo "❌ No se pudo pushear tras reintentos"; exit 1
 
-      - name: Skipping version bump/push for fork PRs
-        if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+            ((packages_tested++)) || true
+
+            machine_file="${RUNNER_TEMP}/tests-${packages_tested}.jsonl"
+            stderr_file="${RUNNER_TEMP}/tests-${packages_tested}.stderr"
+
+            echo ""
+            echo ">> flutter test --coverage: ${directory}"
+
+            set +e
+
+            (
+              cd "$directory"
+              flutter test \
+                --coverage \
+                --machine \
+                > "$machine_file" \
+                2> "$stderr_file"
+            )
+
+            test_exit_code=$?
+
+            set -e
+
+            if [[ -s "$stderr_file" ]]; then
+              cat "$stderr_file"
+            fi
+
+            package_passed=0
+            package_failed=0
+            package_skipped=0
+
+            if [[ -s "$machine_file" ]]; then
+              package_passed="$(
+                jq -s '
+                  [
+                    .[]
+                    | select(
+                        .type == "testDone"
+                        and (.hidden != true)
+                        and (.skipped != true)
+                        and .result == "success"
+                      )
+                  ]
+                  | length
+                ' "$machine_file" 2>/dev/null || echo 0
+              )"
+
+              package_failed="$(
+                jq -s '
+                  [
+                    .[]
+                    | select(
+                        .type == "testDone"
+                        and (.hidden != true)
+                        and (
+                          .result == "failure"
+                          or .result == "error"
+                        )
+                      )
+                  ]
+                  | length
+                ' "$machine_file" 2>/dev/null || echo 0
+              )"
+
+              package_skipped="$(
+                jq -s '
+                  [
+                    .[]
+                    | select(
+                        .type == "testDone"
+                        and (.hidden != true)
+                        and (.skipped == true)
+                      )
+                  ]
+                  | length
+                ' "$machine_file" 2>/dev/null || echo 0
+              )"
+            fi
+
+            package_total="$(
+              awk \
+                -v passed="$package_passed" \
+                -v failed="$package_failed" \
+                -v skipped="$package_skipped" \
+                'BEGIN { print passed + failed + skipped }'
+            )"
+
+            passed=$((passed + package_passed))
+            failed=$((failed + package_failed))
+            skipped=$((skipped + package_skipped))
+            total=$((total + package_total))
+
+            echo "Tests: ${package_total}"
+            echo "Passed: ${package_passed}"
+            echo "Failed: ${package_failed}"
+            echo "Skipped: ${package_skipped}"
+
+            if [[ "$test_exit_code" -ne 0 ]]; then
+              tests_failed=true
+
+              echo "::error title=Test failure::Tests failed in ${directory}."
+
+              if [[ -s "$machine_file" ]]; then
+                echo "::group::Test errors - ${directory}"
+
+                jq -r '
+                  select(.type == "error")
+                  | (.error // empty),
+                    (.stackTrace // empty)
+                ' "$machine_file" || true
+
+                echo "::endgroup::"
+              fi
+            fi
+
+            coverage_file="${directory}/coverage/lcov.info"
+
+            if [[ -f "$coverage_file" ]]; then
+              printf '%s\n' "$coverage_file" >> "$COVERAGE_FILE_LIST"
+            else
+              echo "::error title=Missing coverage::No lcov.info was produced for ${directory}."
+              tests_failed=true
+            fi
+          done < "$PACKAGE_FILE"
+
+          finished_at="$(date +%s)"
+          duration="$((finished_at - started_at))s"
+
+          status="pass"
+
+          if [[ "$packages_tested" -eq 0 || "$total" -eq 0 ]]; then
+            echo "::error title=No tests executed::No test cases were executed."
+            status="fail"
+          fi
+
+          if [[ "$tests_failed" == "true" || "$failed" -gt 0 ]]; then
+            status="fail"
+          fi
+
+          echo "packages_tested=${packages_tested}" >> "$GITHUB_OUTPUT"
+          echo "total=${total}" >> "$GITHUB_OUTPUT"
+          echo "passed=${passed}" >> "$GITHUB_OUTPUT"
+          echo "failed=${failed}" >> "$GITHUB_OUTPUT"
+          echo "skipped=${skipped}" >> "$GITHUB_OUTPUT"
+          echo "duration=${duration}" >> "$GITHUB_OUTPUT"
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate coverage gate
+        id: coverage
+        shell: bash
         run: |
-          echo "ℹ️ Fork PR detected: skipping automatic version bump & push."
-          echo "Please bump 'pubspec.yaml' locally or let a maintainer apply the label and update."
+          set -euo pipefail
+
+          COVERAGE_FILE_LIST="${RUNNER_TEMP}/coverage_files.txt"
+
+          total_lines=0
+          covered_lines=0
+          coverage_files=0
+
+          if [[ -f "$COVERAGE_FILE_LIST" ]]; then
+            while IFS= read -r coverage_file; do
+              [[ -z "$coverage_file" ]] && continue
+
+              ((coverage_files++)) || true
+
+              file_total="$(
+                awk -F: '
+                  /^LF:/ { total += $2 }
+                  END { print total + 0 }
+                ' "$coverage_file"
+              )"
+
+              file_covered="$(
+                awk -F: '
+                  /^LH:/ { total += $2 }
+                  END { print total + 0 }
+                ' "$coverage_file"
+              )"
+
+              total_lines=$((total_lines + file_total))
+              covered_lines=$((covered_lines + file_covered))
+            done < "$COVERAGE_FILE_LIST"
+          fi
+
+          if [[ "$coverage_files" -eq 0 || "$total_lines" -eq 0 ]]; then
+            echo "::error title=Coverage unavailable::No executable lines were found in coverage reports."
+
+            echo "line_coverage=N/A" >> "$GITHUB_OUTPUT"
+            echo "gate=fail" >> "$GITHUB_OUTPUT"
+
+            exit 0
+          fi
+
+          line_coverage="$(
+            awk \
+              -v covered="$covered_lines" \
+              -v total="$total_lines" \
+              'BEGIN {
+                printf "%.2f", (covered / total) * 100
+              }'
+          )"
+
+          gate="fail"
+
+          if awk \
+            -v actual="$line_coverage" \
+            -v required="$COVERAGE_MIN" \
+            'BEGIN { exit !(actual >= required) }'; then
+            gate="pass"
+          fi
+
+          echo "Line coverage: ${line_coverage}%"
+          echo "Required: ${COVERAGE_MIN}%"
+
+          if [[ "$gate" == "pass" ]]; then
+            echo "Coverage gate: PASS"
+          else
+            echo "::error title=Coverage gate failed::${line_coverage}% is below required ${COVERAGE_MIN}%."
+          fi
+
+          echo "line_coverage=${line_coverage}" >> "$GITHUB_OUTPUT"
+          echo "gate=${gate}" >> "$GITHUB_OUTPUT"
+
+      - name: Write PR validation summary
+        if: always()
+        shell: bash
+        env:
+          PACKAGES_DISCOVERED: ${{ steps.packages.outputs.count }}
+          PACKAGES_TESTED: ${{ steps.tests.outputs.packages_tested }}
+          TESTS_TOTAL: ${{ steps.tests.outputs.total }}
+          TESTS_PASSED: ${{ steps.tests.outputs.passed }}
+          TESTS_FAILED: ${{ steps.tests.outputs.failed }}
+          TESTS_SKIPPED: ${{ steps.tests.outputs.skipped }}
+          TESTS_DURATION: ${{ steps.tests.outputs.duration }}
+          TESTS_STATUS: ${{ steps.tests.outputs.status }}
+          LINE_COVERAGE: ${{ steps.coverage.outputs.line_coverage }}
+          COVERAGE_GATE: ${{ steps.coverage.outputs.gate }}
+        run: |
+          set -euo pipefail
+
+          value_or_na() {
+            local value="${1:-}"
+
+            if [[ -z "$value" ]]; then
+              printf 'N/A'
+            else
+              printf '%s' "$value"
+            fi
+          }
+
+          pass_mark() {
+            if [[ "${1:-}" == "pass" ]]; then
+              printf '✅ PASS'
+            else
+              printf '❌ FAIL'
+            fi
+          }
+
+          overall_status="fail"
+
+          if [[ "${TESTS_STATUS:-}" == "pass" &&
+                "${COVERAGE_GATE:-}" == "pass" ]]; then
+            overall_status="pass"
+          fi
+
+          {
+            echo "## Flutter PR Validation"
+            echo ""
+            echo "**Status:** $(pass_mark "$overall_status")"
+            echo ""
+            echo "### Base validation"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Commit signatures | ✅ PASS |"
+            echo "| dependency_overrides | ✅ PASS |"
+            echo "| Dart format | ✅ PASS |"
+            echo "| Strict analyze | ✅ PASS |"
+            echo ""
+            echo "### Tests"
+            echo ""
+            echo "| Metric | Result |"
+            echo "| --- | ---: |"
+            echo "| Packages discovered | $(value_or_na "${PACKAGES_DISCOVERED:-}") |"
+            echo "| Packages tested | $(value_or_na "${PACKAGES_TESTED:-}") |"
+            echo "| Executed | $(value_or_na "${TESTS_TOTAL:-}") |"
+            echo "| Passed | $(value_or_na "${TESTS_PASSED:-}") |"
+            echo "| Failed | $(value_or_na "${TESTS_FAILED:-}") |"
+            echo "| Skipped | $(value_or_na "${TESTS_SKIPPED:-}") |"
+            echo "| Duration | $(value_or_na "${TESTS_DURATION:-}") |"
+            echo "| Gate | $(pass_mark "${TESTS_STATUS:-}") |"
+            echo ""
+            echo "### Coverage"
+            echo ""
+            echo "| Metric | Result |"
+            echo "| --- | ---: |"
+            echo "| Line coverage | $(value_or_na "${LINE_COVERAGE:-}")% |"
+            echo "| Required | ${COVERAGE_MIN:-N/A}% |"
+            echo "| Gate | $(pass_mark "${COVERAGE_GATE:-}") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce PR gates
+        if: always()
+        shell: bash
+        env:
+          TESTS_STATUS: ${{ steps.tests.outputs.status }}
+          COVERAGE_GATE: ${{ steps.coverage.outputs.gate }}
+        run: |
+          set -euo pipefail
+
+          failed=false
+
+          if [[ "${TESTS_STATUS:-}" != "pass" ]]; then
+            echo "::error title=Tests gate failed::The test suite did not complete successfully."
+            failed=true
+          fi
+
+          if [[ "${COVERAGE_GATE:-}" != "pass" ]]; then
+            echo "::error title=Coverage gate failed::The repository did not satisfy its configured coverage threshold."
+            failed=true
+          fi
+
+          if [[ "$failed" == "true" ]]; then
+            exit 1
+          fi
+
+          echo "PR validation passed."
