@@ -14,47 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Added
+## [1.12.0] - 2026-08-29
 
-- Added controlled virtual amount input for income and expense forms.
-- Added `VirtualKeyWidget` as an accessible primitive for virtual keyboard actions.
-- Added `VirtualAmountKeyboardWidget` for digit-only monetary input.
-- Added `AmountMagnifierWidget` with live formatted amount preview.
-- Added explicit amount-editing intents and state management in `BlocIncomeForm`.
-- Added widget and integration coverage for the complete controlled amount-entry flow.
-- Added explicit runtime environment selection through `--dart-define=OKANE_ENV=<dev|qa|prod>`.
-- Added reusable read-only Flutter validation for push and pull-request workflows.
-- Added configurable pull-request line coverage gate through `COVERAGE_MIN`.
-- Added concise GitHub Actions summaries for base validation, tests and coverage.
-- Added deterministic manual version preparation through `prepare_version.yaml`.
-
-### Changed
-
-- Updated project dependencies to their latest compatible versions.
-- Updated Android Gradle, Android Gradle Plugin and Kotlin tooling for compatibility with the current Flutter SDK.
-- Migrated Okane to use the transversal `ProjectorWidget` provided by `jocaaguraarchetype`.
-- Changed the local environment implementation to `OkaneEnv extends Env`.
-- Amount entry now stores only canonical numeric digits while Okane controls monetary presentation.
-- Monetary preview preserves the current Colombian accounting representation with two decimal places.
-- `FormLedgerWidget` now resolves `AppManager` from the application context instead of the global composition root.
-- Unified pull-request validation for `develop` and `master` using the same reusable base validation authority.
-- Separated repository verification from version preparation, artifact generation and publication responsibilities.
-- Defined `develop` as the only canonical branch writable by the VERSION workflow.
-
-### Fixed
-
-- Removed `Env` and `ProjectorWidget` symbol collisions introduced by the Archetype dependency upgrade.
-- Prevented the native keyboard from interfering with controlled monetary input.
-- Preserved amount values when closing and reopening the virtual amount editor.
-- Removed duplicated CI validation logic and non-authoritative checks from the previous workflows.
-
-### Quality
-
-- Expanded the automated suite to 97 passing tests.
-- Added coverage for amount sanitization, formatting, virtual-key interactions, accessibility semantics and income/expense integration.
-- Established a repository coverage gate with a current baseline of 40%.
-- Certified both PASS and FAIL paths of the coverage gate.
-- Added deterministic version monotonicity, CHANGELOG homologation and rerun-idempotency contracts.
+### Added  - Added controlled virtual amount input for income and expense forms. - Added `VirtualKeyWidget` as an accessible primitive for virtual keyboard actions. - Added `VirtualAmountKeyboardWidget` for digit-only monetary input. - Added `AmountMagnifierWidget` with live formatted amount preview. - Added explicit amount-editing intents and state management in `BlocIncomeForm`. - Added widget and integration coverage for the complete controlled amount-entry flow. - Added explicit runtime environment selection through `--dart-define=OKANE_ENV=<dev|qa|prod>`. - Added reusable read-only Flutter validation for push and pull-request workflows. - Added configurable pull-request line coverage gate through `COVERAGE_MIN`. - Added concise GitHub Actions summaries for base validation, tests and coverage. - Added deterministic manual version preparation through `prepare_version.yaml`.  ### Changed  - Updated project dependencies to their latest compatible versions. - Updated Android Gradle, Android Gradle Plugin and Kotlin tooling for compatibility with the current Flutter SDK. - Migrated Okane to use the transversal `ProjectorWidget` provided by `jocaaguraarchetype`. - Changed the local environment implementation to `OkaneEnv extends Env`. - Amount entry now stores only canonical numeric digits while Okane controls monetary presentation. - Monetary preview preserves the current Colombian accounting representation with two decimal places. - `FormLedgerWidget` now resolves `AppManager` from the application context instead of the global composition root. - Unified pull-request validation for `develop` and `master` using the same reusable base validation authority. - Separated repository verification from version preparation, artifact generation and publication responsibilities. - Defined `develop` as the only canonical branch writable by the VERSION workflow.  ### Fixed  - Removed `Env` and `ProjectorWidget` symbol collisions introduced by the Archetype dependency upgrade. - Prevented the native keyboard from interfering with controlled monetary input. - Preserved amount values when closing and reopening the virtual amount editor. - Removed duplicated CI validation logic and non-authoritative checks from the previous workflows.  ### Quality  - Expanded the automated suite to 97 passing tests. - Added coverage for amount sanitization, formatting, virtual-key interactions, accessibility semantics and income/expense integration. - Established a repository coverage gate with a baseline of 40%. - Certified both PASS and FAIL paths of the coverage gate. - Added deterministic version monotonicity, CHANGELOG homologation and rerun-idempotency contracts.
 
 ## [1.11.0] - 2025-09-28
 
