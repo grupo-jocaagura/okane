@@ -8,8 +8,8 @@ on:
         required: true
         type: string
 
-      changelog:
-        description: 'Canonical Markdown release notes'
+      changelog_base64:
+        description: 'Canonical UTF-8 Markdown release notes encoded as Base64'
         required: true
         type: string
 
@@ -28,7 +28,7 @@ jobs:
     env:
       TARGET_BRANCH: develop
       TARGET_VERSION: ${{ inputs.version }}
-      CHANGELOG_INPUT: ${{ inputs.changelog }}
+      CHANGELOG_INPUT_BASE64: ${{ inputs.changelog_base64 }}
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -62,6 +62,8 @@ jobs:
           set -euo pipefail
 
           python3 <<'PY'
+          import base64
+          import binascii
           import datetime
           import hashlib
           import os
@@ -70,7 +72,7 @@ jobs:
           import sys
 
           target_version = os.environ["TARGET_VERSION"].strip()
-          changelog_input = os.environ["CHANGELOG_INPUT"]
+          changelog_base64 = os.environ["CHANGELOG_INPUT_BASE64"].strip()
 
           output_file = pathlib.Path(os.environ["GITHUB_OUTPUT"])
 
@@ -79,11 +81,6 @@ jobs:
 
           version_pattern = re.compile(
               r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)$"
-          )
-
-          semver_heading_pattern = re.compile(
-               r"^##\s+\[(\d+\.\d+\.\d+)\]\s+-\s+(\d{4}-\d{2}-\d{2})\s*$",
-               re.MULTILINE,
           )
 
           unreleased_pattern = re.compile(
@@ -135,7 +132,9 @@ jobs:
           def release_blocks(text: str, semver: str):
               blocks = []
 
-              headings = list(second_level_heading_pattern.finditer(text))
+              headings = list(
+                  second_level_heading_pattern.finditer(text)
+              )
 
               for index, heading in enumerate(headings):
                   line = heading.group(0)
@@ -195,12 +194,39 @@ jobs:
               str(value) for value in target_semver_tuple
           )
 
+          if not changelog_base64:
+              fail(
+                  "CHANGELOG_INPUT_INVALID",
+                  "The canonical changelog Base64 input cannot be empty.",
+              )
+
+          try:
+              changelog_input = base64.b64decode(
+                  changelog_base64,
+                  validate=True,
+              ).decode("utf-8")
+          except (binascii.Error, UnicodeDecodeError):
+              fail(
+                  "CHANGELOG_INPUT_INVALID",
+                  "Canonical changelog must be valid Base64 containing UTF-8 Markdown.",
+              )
+
           notes = canonical_notes(changelog_input)
 
           if not notes:
               fail(
                   "CHANGELOG_INPUT_INVALID",
                   "The canonical changelog block cannot be empty.",
+              )
+
+          if not re.search(
+              r"^###\s+\S+",
+              notes,
+              re.MULTILINE,
+          ):
+              fail(
+                  "CHANGELOG_INPUT_INVALID",
+                  "Canonical changelog must contain at least one level-3 release section.",
               )
 
           if re.search(r"^##\s+", notes, re.MULTILINE):
@@ -239,7 +265,9 @@ jobs:
 
           changelog = changelog_path.read_text(encoding="utf-8")
 
-          unreleased_matches = list(unreleased_pattern.finditer(changelog))
+          unreleased_matches = list(
+              unreleased_pattern.finditer(changelog)
+          )
 
           if len(unreleased_matches) != 1:
               fail(
@@ -247,7 +275,10 @@ jobs:
                   "CHANGELOG.md must contain exactly one '## Unreleased' heading.",
               )
 
-          target_blocks = release_blocks(changelog, target_semver)
+          target_blocks = release_blocks(
+              changelog,
+              target_semver,
+          )
 
           notes_sha = hashlib.sha256(
               notes.encode("utf-8")
@@ -284,7 +315,10 @@ jobs:
               emit("semver_gate", "same")
               emit("build_gate", "same")
               emit("state", "VERSION_ALREADY_PREPARED")
-              emit("reason", "Exact target version and changelog are already homologated.")
+              emit(
+                  "reason",
+                  "Exact target version and changelog are already homologated.",
+              )
 
               print(
                   f"VERSION_ALREADY_PREPARED: {target_version}"
@@ -338,13 +372,16 @@ jobs:
           )
 
           staged_unreleased = canonical_notes(
-              changelog[unreleased.end():next_heading_start]
+              changelog[
+                  unreleased.end():next_heading_start
+              ]
           )
 
           material_lines = [
               line
               for line in staged_unreleased.splitlines()
-              if line.strip() and not line.lstrip().startswith("#")
+              if line.strip()
+              and not line.lstrip().startswith("#")
           ]
 
           if not material_lines:
@@ -366,7 +403,9 @@ jobs:
 
           prefix = changelog[:unreleased.end()].rstrip()
 
-          suffix = changelog[next_heading_start:].lstrip("\n")
+          suffix = changelog[
+              next_heading_start:
+          ].lstrip("\n")
 
           new_changelog = (
               f"{prefix}\n\n"
@@ -422,6 +461,7 @@ jobs:
           TRIGGERED_BY: ${{ github.triggering_actor }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+
         run: |
           set -euo pipefail
 
@@ -517,12 +557,14 @@ jobs:
           fi
 
           COMMIT_SHA="$(
-            jq -r '.data.createCommitOnBranch.commit.oid // empty' \
+            jq -r \
+              '.data.createCommitOnBranch.commit.oid // empty' \
               <<< "$RESPONSE"
           )"
 
           COMMIT_URL="$(
-            jq -r '.data.createCommitOnBranch.commit.url // empty' \
+            jq -r \
+              '.data.createCommitOnBranch.commit.url // empty' \
               <<< "$RESPONSE"
           )"
 
@@ -545,6 +587,7 @@ jobs:
           EXPECTED_VERSION: ${{ steps.prepare.outputs.target_version }}
           EXPECTED_SEMVER: ${{ steps.prepare.outputs.target_semver }}
           EXPECTED_NOTES_SHA: ${{ steps.prepare.outputs.notes_sha }}
+
         run: |
           set -euo pipefail
 
@@ -556,11 +599,15 @@ jobs:
           )"
 
           VERIFIED="$(
-            jq -r '.commit.verification.verified' <<< "$RESPONSE"
+            jq -r \
+              '.commit.verification.verified' \
+              <<< "$RESPONSE"
           )"
 
           VERIFY_REASON="$(
-            jq -r '.commit.verification.reason' <<< "$RESPONSE"
+            jq -r \
+              '.commit.verification.reason' \
+              <<< "$RESPONSE"
           )"
 
           echo "verified=${VERIFIED}" >> "$GITHUB_OUTPUT"
@@ -593,7 +640,9 @@ jobs:
 
           version = os.environ["EXPECTED_VERSION"]
           semver = os.environ["EXPECTED_SEMVER"]
-          expected_notes_sha = os.environ["EXPECTED_NOTES_SHA"]
+          expected_notes_sha = os.environ[
+              "EXPECTED_NOTES_SHA"
+          ]
 
           pubspec = pathlib.Path(
               os.environ["RUNNER_TEMP"],
@@ -623,7 +672,9 @@ jobs:
               re.MULTILINE,
           )
 
-          headings = list(heading_pattern.finditer(changelog))
+          headings = list(
+              heading_pattern.finditer(changelog)
+          )
 
           if len(headings) != 1:
               print(
@@ -641,23 +692,38 @@ jobs:
           )
 
           target_heading = headings[0]
+
           target_index = next(
               index
-              for index, item in enumerate(all_second_level)
+              for index, item in enumerate(
+                  all_second_level
+              )
               if item.start() == target_heading.start()
           )
 
           content_end = (
-              all_second_level[target_index + 1].start()
-              if target_index + 1 < len(all_second_level)
+              all_second_level[
+                  target_index + 1
+              ].start()
+              if target_index + 1
+              < len(all_second_level)
               else len(changelog)
           )
 
           notes = changelog[
               target_heading.end():content_end
-          ].replace("\r\n", "\n").replace("\r", "\n")
+          ].replace(
+              "\r\n",
+              "\n",
+          ).replace(
+              "\r",
+              "\n",
+          )
 
-          lines = [line.rstrip() for line in notes.splitlines()]
+          lines = [
+              line.rstrip()
+              for line in notes.splitlines()
+          ]
 
           while lines and not lines[0].strip():
               lines.pop(0)
@@ -724,6 +790,7 @@ jobs:
           TRIGGERED_BY: ${{ github.triggering_actor }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+
         run: |
           set -euo pipefail
 
@@ -758,7 +825,8 @@ jobs:
                 printf '✅ VERSION_ALREADY_PREPARED'
                 ;;
               *)
-                printf '❌ %s' "$(value_or_na "${1:-}")"
+                printf '❌ %s' \
+                  "$(value_or_na "${1:-}")"
                 ;;
             esac
           }
