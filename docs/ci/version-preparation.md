@@ -101,7 +101,7 @@ The person executing the workflow explicitly supplies:
 
 ```text
 version
-changelog
+changelog_base64
 ```
 
 Example:
@@ -111,15 +111,12 @@ version:
 1.12.0+6
 ```
 
-```markdown
-### Added
+The human operator prepares the canonical Markdown release notes in a local file.
+The file is encoded as Base64 only for transport through `workflow_dispatch`.
+VERSION decodes it back to UTF-8 Markdown before validation and homologation.
 
-- Added controlled virtual amount input.
-
-### Changed
-
-- Added deterministic CI version preparation.
-```
+Base64 is a transport mechanism only.
+It does not change the release-note authority or canonical content.
 
 The workflow does not infer whether a contribution is:
 
@@ -195,7 +192,8 @@ Example:
 ```
 
 When VERSION is prepared, the workflow receives the canonical release notes
-explicitly.
+explicitly in `changelog_base64`, decodes it as UTF-8 Markdown, and then
+validates/homologates it.
 
 The human operator owns the release-note content.
 
@@ -260,10 +258,12 @@ Before preparing a version:
    ## Unreleased
    ```
 5. `Unreleased` must contain material contribution notes.
-6. The target SemVer must be greater than the current SemVer.
-7. The target build number must be greater than the current build number.
-8. The build number must respect any previously homologated publication
-   number for the target platform.
+6. `changelog_base64` must decode successfully as UTF-8.
+7. The decoded Markdown must contain at least one level-3 section (`### ...`).
+8. The target SemVer must be greater than the current SemVer.
+9. The target build number must be greater than the current build number.
+10. The build number must respect any previously homologated publication
+    number for the target platform.
 
 ---
 
@@ -295,7 +295,19 @@ X.Y.Z+N
 and provide the canonical Markdown release block in:
 
 ```text
-changelog
+changelog_base64
+```
+
+Generate:
+
+```bash
+base64 < release-notes.md | tr -d '\n'
+```
+
+then paste the output in:
+
+```text
+changelog_base64
 ```
 
 ---
@@ -320,10 +332,12 @@ Example `release-notes.md`:
 Run:
 
 ```bash
+NOTES_BASE64="$(base64 < release-notes.md | tr -d '\n')"
+
 gh workflow run prepare_version.yaml \
   --ref develop \
-  -f version='1.12.0+6' \
-  -F changelog=@release-notes.md
+  -f version='1.12.0+7' \
+  -f changelog_base64="$NOTES_BASE64"
 ```
 
 The workflow always mutates `develop`, regardless of the caller context.
@@ -447,6 +461,25 @@ VERSION does not automatically repair inconsistent repository states.
 
 ---
 
+## CHANGELOG_INPUT_INVALID
+
+The canonical release-notes input cannot be decoded or validated.
+
+This includes:
+
+* Base64 decode failure.
+* Invalid UTF-8 decoding.
+* Empty decoded content.
+* Missing minimum structure (no `### ...` level-3 section).
+
+Expected result:
+
+```text
+FAIL
+```
+
+---
+
 # Atomic materialization
 
 A successful new preparation modifies exactly:
@@ -479,7 +512,7 @@ The version commit is materialized by GitHub Actions.
 The human operator authorizes:
 
 ```text
-version + changelog
+version + changelog_base64
 ```
 
 GitHub Actions performs the repository mutation.
