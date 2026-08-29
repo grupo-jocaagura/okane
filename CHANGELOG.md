@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.12.0] - 2026-08-29
+
 ### Added
 
 - Added controlled virtual amount input for income and expense forms.
@@ -52,7 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Expanded the automated suite to 97 passing tests.
 - Added coverage for amount sanitization, formatting, virtual-key interactions, accessibility semantics and income/expense integration.
-- Established a repository coverage gate with a current baseline of 40%.
+- Established a repository coverage gate with a baseline of 40%.
 - Certified both PASS and FAIL paths of the coverage gate.
 - Added deterministic version monotonicity, CHANGELOG homologation and rerun-idempotency contracts.
 
