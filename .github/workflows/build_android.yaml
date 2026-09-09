@@ -16,10 +16,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  resolve_android_profile:
-    name: Resolve Android BUILD profile
+  build_android_artifact:
+    name: Build signed Android artifact
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     environment: ${{ inputs.environment }}
 
     steps:
@@ -179,26 +179,147 @@ jobs:
           echo "state=ANDROID_SOURCE_SHA_RESOLVED" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------------------
-      # CP-4 — Ephemeral Android signing reconstruction
+      # BUILD source version
+      # -----------------------------------------------------------------------
+
+      - name: Resolve Flutter version
+        id: version
+        if: steps.resolve_sha.outputs.state == 'ANDROID_SOURCE_SHA_RESOLVED'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          pubspec = pathlib.Path("pubspec.yaml")
+
+          if not pubspec.is_file():
+              print(
+                  "::error title=ANDROID_VERSION_STATE_INVALID::"
+                  "pubspec.yaml does not exist."
+              )
+              sys.exit(1)
+
+          text = pubspec.read_text(encoding="utf-8")
+
+          matches = re.findall(
+              r"^version:\s*([^\s#]+)",
+              text,
+              re.MULTILINE,
+          )
+
+          if len(matches) != 1:
+              print(
+                  "::error title=ANDROID_VERSION_STATE_INVALID::"
+                  "pubspec.yaml must contain exactly one root version declaration."
+              )
+              sys.exit(1)
+
+          version = matches[0]
+
+          match = re.fullmatch(
+              r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\+(0|[1-9]\d*)",
+              version,
+          )
+
+          if match is None:
+              print(
+                  "::error title=ANDROID_VERSION_STATE_INVALID::"
+                  f"Version '{version}' must match X.Y.Z+N."
+              )
+              sys.exit(1)
+
+          major, minor, patch, build = match.groups()
+          semver = f"{major}.{minor}.{patch}"
+
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+
+          with output.open("a", encoding="utf-8") as stream:
+              stream.write("state=ANDROID_VERSION_RESOLVED\n")
+              stream.write(f"flutter_version={version}\n")
+              stream.write(f"semver={semver}\n")
+              stream.write(f"build_number={build}\n")
+
+          print(f"Flutter version: {version}")
+          PY
+
+      # -----------------------------------------------------------------------
+      # Reproducible toolchain
       # -----------------------------------------------------------------------
 
       - name: Set up Java 17
-        if: >-
-          steps.validate_profile.outputs.status == 'valid' &&
-          steps.resolve_sha.outputs.state == 'ANDROID_SOURCE_SHA_RESOLVED'
+        if: steps.version.outputs.state == 'ANDROID_VERSION_RESOLVED'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Reconstruct and verify Android signing identity
-        id: signing
-        if: >-
-          steps.validate_profile.outputs.status == 'valid' &&
-          steps.resolve_sha.outputs.state == 'ANDROID_SOURCE_SHA_RESOLVED'
+      - name: Set up Flutter 3.47.0
+        if: steps.version.outputs.state == 'ANDROID_VERSION_RESOLVED'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.0'
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        id: dependencies
+        if: steps.version.outputs.state == 'ANDROID_VERSION_RESOLVED'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! flutter pub get; then
+            echo "state=ANDROID_DEPENDENCY_RESOLUTION_FAILED" >> "$GITHUB_OUTPUT"
+
+            echo \
+              "::error title=ANDROID_DEPENDENCY_RESOLUTION_FAILED::Flutter dependencies could not be resolved."
+
+            exit 1
+          fi
+
+          echo "state=ANDROID_DEPENDENCIES_RESOLVED" >> "$GITHUB_OUTPUT"
+
+      - name: Verify dependency resolution did not mutate repository
+        id: prebuild_repository
+        if: steps.dependencies.outputs.state == 'ANDROID_DEPENDENCIES_RESOLVED'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "state=ANDROID_REPOSITORY_MUTATION_DETECTED" >> "$GITHUB_OUTPUT"
+
+            echo "::error title=ANDROID_REPOSITORY_MUTATION_DETECTED::Dependency resolution modified repository state."
+            git status --short
+            exit 1
+          fi
+
+          echo "state=ANDROID_REPOSITORY_CLEAN" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # CP-4 + CP-5
+      # Ephemeral signing reconstruction + signed artifact generation
+      # -----------------------------------------------------------------------
+
+      - name: Reconstruct signing identity and build signed artifact
+        id: artifact
+        if: steps.prebuild_repository.outputs.state == 'ANDROID_REPOSITORY_CLEAN'
         shell: bash
         env:
           ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
+
+          ANDROID_FLAVOR: ${{ steps.validate_profile.outputs.android_flavor }}
+          OKANE_ENV: ${{ steps.validate_profile.outputs.okane_env }}
+          EXPECTED_APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
+          ARTIFACT_TYPE: ${{ steps.validate_profile.outputs.artifact_type }}
+
+          FLUTTER_SEMVER: ${{ steps.version.outputs.semver }}
+          FLUTTER_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
 
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -231,25 +352,30 @@ jobs:
           }
 
           signing_dir="${RUNNER_TEMP}/okane-android-signing"
-          keystore_path="${signing_dir}/signing-keystore"
+          keystore_path="${signing_dir}/signing-keystore.jks"
           certificate_path="${signing_dir}/certificate.pem"
+
           probe_dir="${signing_dir}/probe"
           unsigned_probe="${signing_dir}/unsigned-probe.jar"
           signed_probe="${signing_dir}/signed-probe.jar"
 
-          cleanup() {
+          key_properties_path="android/app/key.properties"
+
+          cleanup_signing() {
+            rm -f "$key_properties_path"
             rm -rf "$signing_dir"
           }
 
-          # Ensure temporary signing material is removed on every exit path.
-          trap cleanup EXIT
+          # No signing material may survive this step, including failure paths.
+          trap cleanup_signing EXIT
 
           umask 077
           mkdir -p "$signing_dir"
 
-          # Canonical signing identities are intentionally encoded in the
-          # workflow. GitHub Environment variables must agree with this
-          # repository-owned contract.
+          # -------------------------------------------------------------------
+          # Canonical signing identity
+          # -------------------------------------------------------------------
+
           case "$ENVIRONMENT" in
             dev)
               canonical_alias='okane-dev'
@@ -275,6 +401,10 @@ jobs:
                 "No canonical signing identity exists for environment '${ENVIRONMENT}'."
               ;;
           esac
+
+          # -------------------------------------------------------------------
+          # Signing configuration / secret validation
+          # -------------------------------------------------------------------
 
           if [[ -z "${CONFIGURED_KEY_ALIAS:-}" ||
                 -z "${CONFIGURED_CERT_SHA1:-}" ||
@@ -315,6 +445,10 @@ jobs:
               "ANDROID_SIGNING_IDENTITY_MISMATCH" \
               "Configured SHA-256 fingerprint does not match the canonical environment identity."
           fi
+
+          # -------------------------------------------------------------------
+          # Reconstruct keystore
+          # -------------------------------------------------------------------
 
           if ! printf '%s' "$KEYSTORE_BASE64" |
             base64 --decode > "$keystore_path"; then
@@ -388,8 +522,10 @@ jobs:
               "Reconstructed keystore SHA-256 fingerprint does not match the canonical signing identity."
           fi
 
-          # Prove that the configured key password actually unlocks the private
-          # key. Reading/exporting the certificate alone is not sufficient.
+          # -------------------------------------------------------------------
+          # Prove private-key usability
+          # -------------------------------------------------------------------
+
           mkdir -p "$probe_dir"
 
           printf '%s\n' \
@@ -424,29 +560,304 @@ jobs:
               "The temporary signature probe could not be verified."
           fi
 
-          emit "alias" "$canonical_alias"
-          emit "sha1" "$actual_sha1"
-          emit "sha256" "$actual_sha256"
+          emit "signing_alias" "$canonical_alias"
+          emit "signing_sha1" "$actual_sha1"
+          emit "signing_sha256" "$actual_sha256"
           emit "certificate_match" "pass"
           emit "private_key_probe" "pass"
 
-          # Explicit successful cleanup. The EXIT trap remains as a fallback
-          # for all previous failure paths.
-          cleanup
-          trap - EXIT
+          # -------------------------------------------------------------------
+          # Temporary Gradle signing configuration
+          # -------------------------------------------------------------------
 
-          if [[ -e "$signing_dir" ]]; then
+          {
+            printf 'storeFile=%s\n' "$keystore_path"
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$canonical_alias"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > "$key_properties_path"
+
+          chmod 600 "$key_properties_path"
+
+          # -------------------------------------------------------------------
+          # Environment-specific signed build
+          # -------------------------------------------------------------------
+
+          case "$ARTIFACT_TYPE" in
+            apk)
+              if ! flutter build apk \
+                --release \
+                --flavor "$ANDROID_FLAVOR" \
+                --dart-define="OKANE_ENV=${OKANE_ENV}"; then
+                fail \
+                  "ANDROID_BUILD_FAILED" \
+                  "Flutter failed to generate the signed APK."
+              fi
+              ;;
+
+            aab)
+              if ! flutter build appbundle \
+                --release \
+                --flavor "$ANDROID_FLAVOR" \
+                --dart-define="OKANE_ENV=${OKANE_ENV}"; then
+                fail \
+                  "ANDROID_BUILD_FAILED" \
+                  "Flutter failed to generate the signed Android App Bundle."
+              fi
+              ;;
+
+            *)
+              fail \
+                "ANDROID_BUILD_CONFIG_FAILED" \
+                "Unsupported artifact type '${ARTIFACT_TYPE}'."
+              ;;
+          esac
+
+          # -------------------------------------------------------------------
+          # Locate the exact artifact
+          # -------------------------------------------------------------------
+
+          artifacts=()
+
+          case "$ARTIFACT_TYPE" in
+            apk)
+              expected_artifact="build/app/outputs/flutter-apk/app-${ANDROID_FLAVOR}-release.apk"
+
+              if [[ -f "$expected_artifact" ]]; then
+                artifacts+=("$expected_artifact")
+              fi
+              ;;
+
+            aab)
+              expected_artifact="build/app/outputs/bundle/${ANDROID_FLAVOR}Release/app-${ANDROID_FLAVOR}-release.aab"
+
+              if [[ -f "$expected_artifact" ]]; then
+                artifacts+=("$expected_artifact")
+              fi
+              ;;
+          esac
+
+          if [[ "${#artifacts[@]}" -ne 1 ]]; then
             fail \
-              "ANDROID_SIGNING_CLEANUP_FAILED" \
-              "Temporary signing material remains after cleanup."
+              "ANDROID_ARTIFACT_NOT_FOUND" \
+              "Expected exactly one canonical ${ARTIFACT_TYPE^^} artifact."
           fi
 
+          artifact_path="${artifacts[0]}"
+          artifact_size="$(stat -c '%s' "$artifact_path")"
+
+          # -------------------------------------------------------------------
+          # Verify signed artifact
+          # -------------------------------------------------------------------
+
+          application_id_check="N/A"
+          version_check="N/A"
+          signature_check="N/A"
+          signer_match="N/A"
+
+          if [[ "$ARTIFACT_TYPE" == "apk" ]]; then
+            sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+
+            if [[ -z "$sdk_root" ]]; then
+              fail \
+                "ANDROID_BUILD_CONFIG_FAILED" \
+                "Android SDK root is unavailable."
+            fi
+
+            apksigner_path="$(
+              find "$sdk_root/build-tools" \
+                -mindepth 2 \
+                -maxdepth 2 \
+                -type f \
+                -name apksigner \
+                -print |
+                sort -V |
+                tail -n 1
+            )"
+
+            aapt_path="$(
+              find "$sdk_root/build-tools" \
+                -mindepth 2 \
+                -maxdepth 2 \
+                -type f \
+                -name aapt \
+                -print |
+                sort -V |
+                tail -n 1
+            )"
+
+            if [[ -z "$apksigner_path" || -z "$aapt_path" ]]; then
+              fail \
+                "ANDROID_BUILD_CONFIG_FAILED" \
+                "Android APK verification tools are unavailable."
+            fi
+
+            if ! apk_verify_output="$(
+              "$apksigner_path" \
+                verify \
+                --print-certs \
+                "$artifact_path"
+            )"; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNATURE_INVALID" \
+                "APK signature verification failed."
+            fi
+
+            artifact_cert_sha256="$(
+              printf '%s\n' "$apk_verify_output" |
+                sed -n \
+                  's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' |
+                head -n 1
+            )"
+
+            if [[ -z "$artifact_cert_sha256" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNATURE_INVALID" \
+                "APK signer certificate fingerprint could not be resolved."
+            fi
+
+            if [[ \
+              "$(normalize_fingerprint "$artifact_cert_sha256")" != \
+              "$(normalize_fingerprint "$canonical_sha256")" \
+            ]]; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNER_MISMATCH" \
+                "APK signer does not match the canonical environment signing identity."
+            fi
+
+            signer_match="pass"
+            signature_check="pass"
+
+            badging="$("$aapt_path" dump badging "$artifact_path")"
+
+            actual_application_id="$(
+              printf '%s\n' "$badging" |
+                sed -n "s/^package: name='\([^']*\)'.*/\1/p" |
+                head -n 1
+            )"
+
+            actual_version_code="$(
+              printf '%s\n' "$badging" |
+                sed -n "s/^package: .*versionCode='\([^']*\)'.*/\1/p" |
+                head -n 1
+            )"
+
+            actual_version_name="$(
+              printf '%s\n' "$badging" |
+                sed -n "s/^package: .*versionName='\([^']*\)'.*/\1/p" |
+                head -n 1
+            )"
+
+            if [[ "$actual_application_id" != "$EXPECTED_APPLICATION_ID" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_IDENTITY_MISMATCH" \
+                "APK applicationId '${actual_application_id}' does not match '${EXPECTED_APPLICATION_ID}'."
+            fi
+
+            application_id_check="pass"
+
+            expected_version_name="$FLUTTER_SEMVER"
+
+            case "$ANDROID_FLAVOR" in
+              dev|qa)
+                expected_version_name="${FLUTTER_SEMVER}-${ANDROID_FLAVOR}"
+                ;;
+            esac
+
+            if [[ "$actual_version_code" != "$FLUTTER_BUILD_NUMBER" ||
+                  "$actual_version_name" != "$expected_version_name" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_VERSION_MISMATCH" \
+                "APK version metadata does not match the canonical Flutter version."
+            fi
+
+            version_check="pass"
+
+          elif [[ "$ARTIFACT_TYPE" == "aab" ]]; then
+            # An AAB uses JAR signing rather than APK signing.
+            if ! jarsigner \
+              -verify \
+              "$artifact_path" \
+              >/dev/null 2>&1; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNATURE_INVALID" \
+                "Android App Bundle signature verification failed."
+            fi
+
+            certificate_info="$(
+              keytool \
+                -J-Duser.language=en \
+                -J-Duser.country=US \
+                -printcert \
+                -jarfile "$artifact_path"
+            )"
+
+            artifact_cert_sha256="$(
+              printf '%s\n' "$certificate_info" |
+                sed -n \
+                  's/^[[:space:]]*SHA256:[[:space:]]*//p' |
+                head -n 1
+            )"
+
+            if [[ -z "$artifact_cert_sha256" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNATURE_INVALID" \
+                "AAB signer certificate fingerprint could not be resolved."
+            fi
+
+            if [[ \
+              "$(normalize_fingerprint "$artifact_cert_sha256")" != \
+              "$(normalize_fingerprint "$canonical_sha256")" \
+            ]]; then
+              fail \
+                "ANDROID_ARTIFACT_SIGNER_MISMATCH" \
+                "AAB signer does not match the canonical environment signing identity."
+            fi
+
+            signature_check="pass"
+            signer_match="pass"
+
+            # Package/version inspection for the production AAB is intentionally
+            # left for the provenance checkpoint, where bundle metadata will be
+            # inspected with the appropriate bundle tooling.
+            application_id_check="contract"
+            version_check="contract"
+          fi
+
+          # -------------------------------------------------------------------
+          # Explicit ephemeral signing cleanup
+          # -------------------------------------------------------------------
+
+          cleanup_signing
+
+          if [[ -e "$signing_dir" || -e "$key_properties_path" ]]; then
+            fail \
+              "ANDROID_BUILD_CLEANUP_FAILED" \
+              "Temporary Android signing material remains after BUILD cleanup."
+          fi
+
+          trap - EXIT
+
           emit "cleanup" "pass"
-          emit "state" "ANDROID_SIGNING_RECONSTRUCTED"
+
+          emit "artifact_type" "$ARTIFACT_TYPE"
+          emit "artifact_path" "$artifact_path"
+          emit "artifact_size" "$artifact_size"
+
+          emit "application_id_check" "$application_id_check"
+          emit "version_check" "$version_check"
+          emit "signature_check" "$signature_check"
+          emit "signer_match" "$signer_match"
+
+          emit "state" "ANDROID_ARTIFACT_GENERATED"
+
+      # -----------------------------------------------------------------------
+      # Repository postcondition
+      # -----------------------------------------------------------------------
 
       - name: Verify repository remains unmodified
         id: repository_state
-        if: steps.signing.outputs.state == 'ANDROID_SIGNING_RECONSTRUCTED'
+        if: steps.artifact.outputs.state == 'ANDROID_ARTIFACT_GENERATED'
         shell: bash
         run: |
           set -euo pipefail
@@ -455,8 +866,9 @@ jobs:
             echo "state=ANDROID_REPOSITORY_MUTATION_DETECTED" >> "$GITHUB_OUTPUT"
 
             echo \
-              "::error title=ANDROID_REPOSITORY_MUTATION_DETECTED::Signing reconstruction modified the checked-out repository."
+              "::error title=ANDROID_REPOSITORY_MUTATION_DETECTED::Android BUILD modified the checked-out repository."
 
+            git status --short
             exit 1
           fi
 
@@ -486,14 +898,31 @@ jobs:
           SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
           SOURCE_SHA_STATE: ${{ steps.resolve_sha.outputs.state }}
 
-          SIGNING_OUTCOME: ${{ steps.signing.outcome }}
-          SIGNING_STATE: ${{ steps.signing.outputs.state }}
-          SIGNING_ALIAS: ${{ steps.signing.outputs.alias }}
-          SIGNING_SHA1: ${{ steps.signing.outputs.sha1 }}
-          SIGNING_SHA256: ${{ steps.signing.outputs.sha256 }}
-          CERTIFICATE_MATCH: ${{ steps.signing.outputs.certificate_match }}
-          PRIVATE_KEY_PROBE: ${{ steps.signing.outputs.private_key_probe }}
-          SIGNING_CLEANUP: ${{ steps.signing.outputs.cleanup }}
+          VERSION_STATE: ${{ steps.version.outputs.state }}
+          FLUTTER_VERSION: ${{ steps.version.outputs.flutter_version }}
+          FLUTTER_SEMVER: ${{ steps.version.outputs.semver }}
+          FLUTTER_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+
+          DEPENDENCIES_STATE: ${{ steps.dependencies.outputs.state }}
+          PREBUILD_REPOSITORY_STATE: ${{ steps.prebuild_repository.outputs.state }}
+
+          ARTIFACT_STATE: ${{ steps.artifact.outputs.state }}
+          ARTIFACT_TYPE: ${{ steps.artifact.outputs.artifact_type }}
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
+          ARTIFACT_SIZE: ${{ steps.artifact.outputs.artifact_size }}
+
+          SIGNING_ALIAS: ${{ steps.artifact.outputs.signing_alias }}
+          SIGNING_SHA1: ${{ steps.artifact.outputs.signing_sha1 }}
+          SIGNING_SHA256: ${{ steps.artifact.outputs.signing_sha256 }}
+
+          CERTIFICATE_MATCH: ${{ steps.artifact.outputs.certificate_match }}
+          PRIVATE_KEY_PROBE: ${{ steps.artifact.outputs.private_key_probe }}
+          SIGNING_CLEANUP: ${{ steps.artifact.outputs.cleanup }}
+
+          APPLICATION_ID_CHECK: ${{ steps.artifact.outputs.application_id_check }}
+          VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
+          SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
+          SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
 
           REPOSITORY_STATE: ${{ steps.repository_state.outputs.state }}
 
@@ -511,12 +940,18 @@ jobs:
             fi
           }
 
-          pass_or_na() {
-            if [[ "${1:-}" == "pass" ]]; then
-              printf '✅ PASS'
-            else
-              printf 'N/A'
-            fi
+          pass_contract_or_na() {
+            case "${1:-}" in
+              pass)
+                printf '✅ PASS'
+                ;;
+              contract)
+                printf '✅ CONTRACT'
+                ;;
+              *)
+                printf 'N/A'
+                ;;
+            esac
           }
 
           if [[ "${PROFILE_STATUS:-}" != "valid" ]]; then
@@ -527,8 +962,20 @@ jobs:
             final_state="${SOURCE_SHA_STATE:-ANDROID_SOURCE_RESOLUTION_FAILED}"
             status="❌ ${final_state}"
 
-          elif [[ "${SIGNING_STATE:-}" != "ANDROID_SIGNING_RECONSTRUCTED" ]]; then
-            final_state="${SIGNING_STATE:-ANDROID_SIGNING_RECONSTRUCTION_FAILED}"
+          elif [[ "${VERSION_STATE:-}" != "ANDROID_VERSION_RESOLVED" ]]; then
+            final_state="${VERSION_STATE:-ANDROID_VERSION_STATE_INVALID}"
+            status="❌ ${final_state}"
+
+          elif [[ "${DEPENDENCIES_STATE:-}" != "ANDROID_DEPENDENCIES_RESOLVED" ]]; then
+            final_state="${DEPENDENCIES_STATE:-ANDROID_DEPENDENCY_RESOLUTION_FAILED}"
+            status="❌ ${final_state}"
+
+          elif [[ "${PREBUILD_REPOSITORY_STATE:-}" != "ANDROID_REPOSITORY_CLEAN" ]]; then
+            final_state="${PREBUILD_REPOSITORY_STATE:-ANDROID_REPOSITORY_STATE_UNKNOWN}"
+            status="❌ ${final_state}"
+
+          elif [[ "${ARTIFACT_STATE:-}" != "ANDROID_ARTIFACT_GENERATED" ]]; then
+            final_state="${ARTIFACT_STATE:-ANDROID_ARTIFACT_GENERATION_FAILED}"
             status="❌ ${final_state}"
 
           elif [[ "${REPOSITORY_STATE:-}" != "ANDROID_REPOSITORY_CLEAN" ]]; then
@@ -536,7 +983,7 @@ jobs:
             status="❌ ${final_state}"
 
           else
-            final_state="ANDROID_SIGNING_RECONSTRUCTED"
+            final_state="ANDROID_ARTIFACT_GENERATED"
             status="✅ ${final_state}"
           fi
 
@@ -568,6 +1015,15 @@ jobs:
             echo "| Artifact policy | \`$(value_or_na "${PROFILE_ARTIFACT_TYPE:-}")\` |"
             echo ""
 
+            echo "### Version"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Flutter version | \`$(value_or_na "${FLUTTER_VERSION:-}")\` |"
+            echo "| SemVer | \`$(value_or_na "${FLUTTER_SEMVER:-}")\` |"
+            echo "| Build number | \`$(value_or_na "${FLUTTER_BUILD_NUMBER:-}")\` |"
+            echo ""
+
             echo "### Signing"
             echo ""
             echo "| Metric | Value |"
@@ -575,9 +1031,22 @@ jobs:
             echo "| Alias | \`$(value_or_na "${SIGNING_ALIAS:-}")\` |"
             echo "| SHA-1 | \`$(value_or_na "${SIGNING_SHA1:-}")\` |"
             echo "| SHA-256 | \`$(value_or_na "${SIGNING_SHA256:-}")\` |"
-            echo "| Certificate identity | $(pass_or_na "${CERTIFICATE_MATCH:-}") |"
-            echo "| Private-key probe | $(pass_or_na "${PRIVATE_KEY_PROBE:-}") |"
-            echo "| Ephemeral cleanup | $(pass_or_na "${SIGNING_CLEANUP:-}") |"
+            echo "| Certificate identity | $(pass_contract_or_na "${CERTIFICATE_MATCH:-}") |"
+            echo "| Private-key probe | $(pass_contract_or_na "${PRIVATE_KEY_PROBE:-}") |"
+            echo "| Ephemeral cleanup | $(pass_contract_or_na "${SIGNING_CLEANUP:-}") |"
+            echo ""
+
+            echo "### Artifact"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Type | \`$(value_or_na "${ARTIFACT_TYPE:-}")\` |"
+            echo "| Path | \`$(value_or_na "${ARTIFACT_PATH:-}")\` |"
+            echo "| Size | $(value_or_na "${ARTIFACT_SIZE:-}") bytes |"
+            echo "| applicationId | $(pass_contract_or_na "${APPLICATION_ID_CHECK:-}") |"
+            echo "| Version metadata | $(pass_contract_or_na "${VERSION_CHECK:-}") |"
+            echo "| Signature | $(pass_contract_or_na "${SIGNATURE_CHECK:-}") |"
+            echo "| Canonical signer | $(pass_contract_or_na "${SIGNER_MATCH:-}") |"
             echo ""
 
             echo "### Execution boundary"
@@ -587,7 +1056,6 @@ jobs:
             echo "| Repository | $(value_or_na "${REPOSITORY_STATE:-}") |"
             echo "| Repository mutation | none |"
             echo "| Signing material persistence | none |"
-            echo "| APK generation | not executed |"
-            echo "| AAB generation | not executed |"
-            echo "| Artifact upload | not executed |"
+            echo "| GitHub Artifact upload | not executed |"
+            echo "| Publication | not executed |"
           } >> "$GITHUB_STEP_SUMMARY"
