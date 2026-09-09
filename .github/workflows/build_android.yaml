@@ -695,6 +695,7 @@ jobs:
             if ! apk_verify_output="$(
               "$apksigner_path" \
                 verify \
+                --verbose \
                 --print-certs \
                 "$artifact_path"
             )"; then
@@ -703,17 +704,18 @@ jobs:
                 "APK signature verification failed."
             fi
 
+            printf '%s\n' "$apk_verify_output"
+
             artifact_cert_sha256="$(
               printf '%s\n' "$apk_verify_output" |
                 sed -n \
-                  's/^Signer #1 certificate SHA-256 digest:[[:space:]]*//p' |
+                  's/^.*certificate SHA-256 digest:[[:space:]]*//p' |
                 head -n 1
             )"
-
             if [[ -z "$artifact_cert_sha256" ]]; then
               fail \
-                "ANDROID_ARTIFACT_SIGNATURE_INVALID" \
-                "APK signer certificate fingerprint could not be resolved."
+                "ANDROID_ARTIFACT_SIGNER_UNRESOLVED" \
+                "APK signature is valid but the signer certificate fingerprint could not be resolved."
             fi
 
             if [[ \
@@ -760,7 +762,7 @@ jobs:
 
             case "$ANDROID_FLAVOR" in
               dev|qa)
-                expected_version_name="${FLUTTER_SEMVER}-${ANDROID_FLAVOR}"
+                expected_version_name="${EXPECTED_SEMVER}-${ANDROID_FLAVOR}"
                 ;;
             esac
 
@@ -899,7 +901,7 @@ jobs:
           SOURCE_SHA_STATE: ${{ steps.resolve_sha.outputs.state }}
 
           VERSION_STATE: ${{ steps.version.outputs.state }}
-          FLUTTER_VERSION: ${{ steps.version.outputs.flutter_version }}
+          RESOLVED_VERSION: ${{ steps.version.outputs.flutter_version }}
           RESOLVED_SEMVER: ${{ steps.version.outputs.semver }}
           RESOLVED_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
           DEPENDENCIES_STATE: ${{ steps.dependencies.outputs.state }}
@@ -1018,9 +1020,9 @@ jobs:
             echo ""
             echo "| Metric | Value |"
             echo "| --- | --- |"
-            echo "| Flutter version | \`$(value_or_na "${FLUTTER_VERSION:-}")\` |"
-            echo "| SemVer | \`$(value_or_na "${FLUTTER_SEMVER:-}")\` |"
-            echo "| Build number | \`$(value_or_na "${FLUTTER_BUILD_NUMBER:-}")\` |"
+            echo "| Flutter version | \`$(value_or_na "${RESOLVED_VERSION:-}")\` |"
+            echo "| SemVer | \`$(value_or_na "${RESOLVED_SEMVER:-}")\` |"
+            echo "| Build number | \`$(value_or_na "${RESOLVED_BUILD_NUMBER:-}")\` |"
             echo ""
 
             echo "### Signing"
