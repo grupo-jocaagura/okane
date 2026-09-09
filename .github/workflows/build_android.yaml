@@ -318,8 +318,8 @@ jobs:
           EXPECTED_APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
           ARTIFACT_TYPE: ${{ steps.validate_profile.outputs.artifact_type }}
 
-          FLUTTER_SEMVER: ${{ steps.version.outputs.semver }}
-          FLUTTER_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+          EXPECTED_SEMVER: ${{ steps.version.outputs.semver }}
+          EXPECTED_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
 
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -756,7 +756,7 @@ jobs:
 
             application_id_check="pass"
 
-            expected_version_name="$FLUTTER_SEMVER"
+            expected_version_name="$EXPECTED_SEMVER"
 
             case "$ANDROID_FLAVOR" in
               dev|qa)
@@ -764,7 +764,7 @@ jobs:
                 ;;
             esac
 
-            if [[ "$actual_version_code" != "$FLUTTER_BUILD_NUMBER" ||
+            if [[ "$actual_version_code" != "$EXPECTED_BUILD_NUMBER" ||
                   "$actual_version_name" != "$expected_version_name" ]]; then
               fail \
                 "ANDROID_ARTIFACT_VERSION_MISMATCH" \
@@ -900,9 +900,8 @@ jobs:
 
           VERSION_STATE: ${{ steps.version.outputs.state }}
           FLUTTER_VERSION: ${{ steps.version.outputs.flutter_version }}
-          FLUTTER_SEMVER: ${{ steps.version.outputs.semver }}
-          FLUTTER_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
-
+          RESOLVED_SEMVER: ${{ steps.version.outputs.semver }}
+          RESOLVED_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
           DEPENDENCIES_STATE: ${{ steps.dependencies.outputs.state }}
           PREBUILD_REPOSITORY_STATE: ${{ steps.prebuild_repository.outputs.state }}
 
