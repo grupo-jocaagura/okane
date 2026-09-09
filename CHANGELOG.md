@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Security] in case of vulnerabilities.
 
 ## Unreleased
+### Changed
+
+- Added explicit Android `dev`, `qa`, and `prod` product flavors, separating
+  environment identity from debug/release build types and allowing DEV and QA
+  installations to coexist on the same device.
 
 ## [1.12.0] - 2026-08-29
 

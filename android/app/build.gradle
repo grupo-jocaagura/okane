@@ -42,14 +42,33 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".dev"
-            versionNameSuffix "-dev"
             debuggable true
         }
         release {
             signingConfig signingConfigs.release
             minifyEnabled true
             shrinkResources true
+        }
+    }
+
+    flavorDimensions += "environment"
+
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            manifestPlaceholders = [appName: "Okane (DEV)"]
+        }
+        qa {
+            dimension "environment"
+            applicationIdSuffix ".qa"
+            versionNameSuffix "-qa"
+            manifestPlaceholders = [appName: "Okane (QA)"]
+        }
+        prod {
+            dimension "environment"
+            manifestPlaceholders = [appName: "Okane"]
         }
     }
 }

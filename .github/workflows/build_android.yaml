@@ -1,0 +1,274 @@
+name: Android BUILD Profile Resolution
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'GitHub Environment'
+        required: true
+        type: environment
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  resolve_android_profile:
+    name: Resolve Android BUILD profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Validate requested environment and canonical profile
+        id: validate_profile
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+
+          VAR_SOURCE_BRANCH: ${{ vars.SOURCE_BRANCH }}
+          VAR_ANDROID_FLAVOR: ${{ vars.ANDROID_FLAVOR }}
+          VAR_OKANE_ENV: ${{ vars.OKANE_ENV }}
+          VAR_APPLICATION_ID: ${{ vars.ANDROID_APPLICATION_ID }}
+          VAR_ARTIFACT_TYPE: ${{ vars.ANDROID_ARTIFACT_TYPE }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+          }
+
+          fail() {
+            local state="$1"
+            local message="$2"
+
+            emit "status" "invalid"
+            emit "state" "$state"
+
+            echo "::error title=${state}::${message}"
+            exit 1
+          }
+
+          environment="$ENVIRONMENT"
+          ref_name="$REF_NAME"
+          ref_type="$REF_TYPE"
+
+          source_branch="$VAR_SOURCE_BRANCH"
+          android_flavor="$VAR_ANDROID_FLAVOR"
+          okane_env="$VAR_OKANE_ENV"
+          application_id="$VAR_APPLICATION_ID"
+          artifact_type="$VAR_ARTIFACT_TYPE"
+
+          emit "environment" "$environment"
+          emit "ref_name" "$ref_name"
+          emit "ref_type" "$ref_type"
+
+          case "$environment" in
+            dev)
+              expected_source_branch='develop'
+              expected_android_flavor='dev'
+              expected_okane_env='dev'
+              expected_application_id='co.com.okane.okane.dev'
+              expected_artifact_type='apk'
+              ;;
+
+            qa)
+              expected_source_branch='develop'
+              expected_android_flavor='qa'
+              expected_okane_env='qa'
+              expected_application_id='co.com.okane.okane.qa'
+              expected_artifact_type='apk'
+              ;;
+
+            prod)
+              expected_source_branch='master'
+              expected_android_flavor='prod'
+              expected_okane_env='prod'
+              expected_application_id='co.com.okane.okane'
+              expected_artifact_type='aab'
+              ;;
+
+            *)
+              fail \
+                "ANDROID_PROFILE_INVALID" \
+                "Environment '${environment}' is not allowed."
+              ;;
+          esac
+
+          emit "expected_source_branch" "$expected_source_branch"
+
+          if [[ "$ref_type" != "branch" ]]; then
+            fail \
+              "ANDROID_SOURCE_REF_INVALID" \
+              "github.ref_type must be 'branch', received '${ref_type}'."
+          fi
+
+          if [[ "$ref_name" != "$expected_source_branch" ]]; then
+            fail \
+              "ANDROID_SOURCE_REF_INVALID" \
+              "github.ref_name '${ref_name}' does not match required source branch '${expected_source_branch}'."
+          fi
+
+          if [[ -z "$source_branch" ||
+                -z "$android_flavor" ||
+                -z "$okane_env" ||
+                -z "$application_id" ||
+                -z "$artifact_type" ]]; then
+            fail \
+              "ANDROID_PROFILE_INVALID" \
+              "One or more required GitHub Environment variables are missing."
+          fi
+
+          if [[ "$source_branch" != "$expected_source_branch" ||
+                "$android_flavor" != "$expected_android_flavor" ||
+                "$okane_env" != "$expected_okane_env" ||
+                "$application_id" != "$expected_application_id" ||
+                "$artifact_type" != "$expected_artifact_type" ]]; then
+            fail \
+              "ANDROID_PROFILE_INVALID" \
+              "GitHub Environment variables do not match the canonical Android BUILD profile."
+          fi
+
+          emit "status" "valid"
+          emit "state" "ANDROID_PROFILE_RESOLVED"
+
+          emit "source_branch" "$source_branch"
+          emit "android_flavor" "$android_flavor"
+          emit "okane_env" "$okane_env"
+          emit "application_id" "$application_id"
+          emit "artifact_type" "$artifact_type"
+
+          echo "Android BUILD profile resolved:"
+          echo "  environment:    ${environment}"
+          echo "  source branch:  ${source_branch}"
+          echo "  Android flavor: ${android_flavor}"
+          echo "  OKANE_ENV:      ${okane_env}"
+          echo "  applicationId:  ${application_id}"
+          echo "  artifact type:  ${artifact_type}"
+
+      - name: Checkout exact authorized source SHA
+        if: steps.validate_profile.outputs.status == 'valid'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate immutable source SHA
+        id: resolve_sha
+        if: steps.validate_profile.outputs.status == 'valid'
+        shell: bash
+        env:
+          TRIGGER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          source_sha="$(git rev-parse HEAD)"
+
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$source_sha" != "$TRIGGER_SHA" ]]; then
+            echo "state=ANDROID_SOURCE_SHA_MISMATCH" >> "$GITHUB_OUTPUT"
+
+            echo \
+              "::error title=ANDROID_SOURCE_SHA_MISMATCH::Checked out SHA '${source_sha}' does not match authorized dispatch SHA '${TRIGGER_SHA}'."
+
+            exit 1
+          fi
+
+          echo "state=ANDROID_SOURCE_SHA_RESOLVED" >> "$GITHUB_OUTPUT"
+
+          echo "Authorized source SHA: ${source_sha}"
+
+      - name: Write Android BUILD profile summary
+        if: always()
+        shell: bash
+        env:
+          PROFILE_STATUS: ${{ steps.validate_profile.outputs.status }}
+          PROFILE_STATE: ${{ steps.validate_profile.outputs.state }}
+
+          REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
+
+          PROFILE_SOURCE_BRANCH: ${{ steps.validate_profile.outputs.source_branch }}
+          EXPECTED_SOURCE_BRANCH: ${{ steps.validate_profile.outputs.expected_source_branch }}
+
+          PROFILE_ANDROID_FLAVOR: ${{ steps.validate_profile.outputs.android_flavor }}
+          PROFILE_OKANE_ENV: ${{ steps.validate_profile.outputs.okane_env }}
+          PROFILE_APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
+          PROFILE_ARTIFACT_TYPE: ${{ steps.validate_profile.outputs.artifact_type }}
+
+          SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
+          SOURCE_SHA_STATE: ${{ steps.resolve_sha.outputs.state }}
+
+          TRIGGER_REF: ${{ github.ref_name }}
+          TRIGGER_REF_TYPE: ${{ github.ref_type }}
+          TRIGGER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          value_or_na() {
+            if [[ -z "${1:-}" ]]; then
+              printf 'N/A'
+            else
+              printf '%s' "$1"
+            fi
+          }
+
+          if [[ "${PROFILE_STATUS:-}" != "valid" ]]; then
+            final_state="${PROFILE_STATE:-ANDROID_PROFILE_INVALID}"
+            status="❌ ${final_state}"
+
+          elif [[ "${SOURCE_SHA_STATE:-}" == "ANDROID_SOURCE_SHA_RESOLVED" ]]; then
+            final_state="ANDROID_PROFILE_RESOLVED"
+            status="✅ ${final_state}"
+
+          elif [[ -n "${SOURCE_SHA_STATE:-}" ]]; then
+            final_state="$SOURCE_SHA_STATE"
+            status="❌ ${final_state}"
+
+          else
+            final_state="ANDROID_SOURCE_RESOLUTION_FAILED"
+            status="❌ ${final_state}"
+          fi
+
+          {
+            echo "## Android BUILD Profile"
+            echo ""
+            echo "**Status:** ${status}"
+            echo ""
+
+            echo "### Authorization"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Environment | \`$(value_or_na "${REQUESTED_ENVIRONMENT:-}")\` |"
+            echo "| Trigger ref type | \`$(value_or_na "${TRIGGER_REF_TYPE:-}")\` |"
+            echo "| Trigger ref | \`$(value_or_na "${TRIGGER_REF:-}")\` |"
+            echo "| Trigger SHA | \`$(value_or_na "${TRIGGER_SHA:-}")\` |"
+            echo ""
+
+            echo "### Android profile"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Source branch | \`$(value_or_na "${PROFILE_SOURCE_BRANCH:-${EXPECTED_SOURCE_BRANCH:-}}")\` |"
+            echo "| Source SHA | \`$(value_or_na "${SOURCE_SHA:-}")\` |"
+            echo "| Android flavor | \`$(value_or_na "${PROFILE_ANDROID_FLAVOR:-}")\` |"
+            echo "| OKANE_ENV | \`$(value_or_na "${PROFILE_OKANE_ENV:-}")\` |"
+            echo "| applicationId | \`$(value_or_na "${PROFILE_APPLICATION_ID:-}")\` |"
+            echo "| Artifact policy | \`$(value_or_na "${PROFILE_ARTIFACT_TYPE:-}")\` |"
+            echo ""
+
+            echo "### Execution boundary"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Repository mutation | none |"
+            echo "| Signing | not accessed |"
+            echo "| Artifact generation | not executed |"
+          } >> "$GITHUB_STEP_SUMMARY"
