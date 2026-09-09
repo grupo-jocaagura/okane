@@ -1206,6 +1206,296 @@ jobs:
 
           emit "state" "ANDROID_ARTIFACT_PROVENANCE_VERIFIED"
       # -----------------------------------------------------------------------
+      # CP-7 — GitHub Artifact persistence + E2E BUILD certification
+      # -----------------------------------------------------------------------
+
+      - name: Prepare certified GitHub Artifact package
+        id: package
+        if: steps.persistence.outputs.state == 'ANDROID_ARTIFACT_PERSISTENCE_VERIFIED'
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
+          APP_VERSION: ${{ steps.version.outputs.flutter_version }}
+          SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
+
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
+          ARTIFACT_SHA256: ${{ steps.provenance.outputs.artifact_sha256 }}
+
+          CHECKSUM_PATH: ${{ steps.provenance.outputs.checksum_path }}
+
+          PROVENANCE_PATH: ${{ steps.provenance.outputs.provenance_path }}
+          PROVENANCE_SHA256: ${{ steps.provenance.outputs.provenance_sha256 }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+          }
+
+          fail() {
+            local state="$1"
+            local message="$2"
+
+            emit "state" "$state"
+
+            echo "::error title=${state}::${message}"
+            exit 1
+          }
+
+          for required_file in \
+            "$ARTIFACT_PATH" \
+            "$CHECKSUM_PATH" \
+            "$PROVENANCE_PATH"; do
+            if [[ ! -f "$required_file" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_PACKAGE_INVALID" \
+                "A certified CP-6 output required for persistence is missing."
+            fi
+          done
+
+          package_dir="${RUNNER_TEMP}/okane-android-artifact-package"
+          rm -rf "$package_dir"
+          mkdir -p "$package_dir"
+
+          artifact_file="$(basename "$ARTIFACT_PATH")"
+          checksum_file="$(basename "$CHECKSUM_PATH")"
+          provenance_file="$(basename "$PROVENANCE_PATH")"
+
+          cp -- "$ARTIFACT_PATH" "${package_dir}/${artifact_file}"
+          cp -- "$CHECKSUM_PATH" "${package_dir}/${checksum_file}"
+          cp -- "$PROVENANCE_PATH" "${package_dir}/${provenance_file}"
+
+          mapfile -t package_files < <(
+            find "$package_dir" \
+              -maxdepth 1 \
+              -type f \
+              -printf '%f\n' |
+              sort
+          )
+
+          if [[ "${#package_files[@]}" -ne 3 ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PACKAGE_INVALID" \
+              "GitHub Artifact package must contain exactly three certified files."
+          fi
+
+          for expected_file in \
+            "$artifact_file" \
+            "$checksum_file" \
+            "$provenance_file"; do
+            if [[ ! -f "${package_dir}/${expected_file}" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_PACKAGE_INVALID" \
+                "GitHub Artifact package is missing '${expected_file}'."
+            fi
+          done
+
+          packaged_artifact_sha256="$(
+            sha256sum "${package_dir}/${artifact_file}" |
+              awk '{print $1}'
+          )"
+
+          if [[ "$packaged_artifact_sha256" != "$ARTIFACT_SHA256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PACKAGE_INTEGRITY_MISMATCH" \
+              "Packaged Android artifact does not match the CP-6 artifact SHA-256."
+          fi
+
+          packaged_provenance_sha256="$(
+            sha256sum "${package_dir}/${provenance_file}" |
+              awk '{print $1}'
+          )"
+
+          if [[ "$packaged_provenance_sha256" != "$PROVENANCE_SHA256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PACKAGE_INTEGRITY_MISMATCH" \
+              "Packaged provenance manifest does not match the CP-6 provenance SHA-256."
+          fi
+
+          if ! (
+            cd "$package_dir"
+            sha256sum -c "$checksum_file" >/dev/null
+          ); then
+            fail \
+              "ANDROID_ARTIFACT_PACKAGE_INTEGRITY_MISMATCH" \
+              "Packaged Android artifact does not validate against its certified checksum file."
+          fi
+
+          safe_version="${APP_VERSION//+/_}"
+          short_sha="${SOURCE_SHA:0:12}"
+
+          github_artifact_name="okane-android-${ENVIRONMENT}-${safe_version}-${short_sha}"
+
+          emit "package_dir" "$package_dir"
+          emit "github_artifact_name" "$github_artifact_name"
+
+          emit "artifact_file" "$artifact_file"
+          emit "checksum_file" "$checksum_file"
+          emit "provenance_file" "$provenance_file"
+
+          emit "package_verification" "pass"
+          emit "state" "ANDROID_ARTIFACT_PACKAGE_READY"
+
+      - name: Upload certified Android Artifact
+        id: upload
+        if: steps.package.outputs.state == 'ANDROID_ARTIFACT_PACKAGE_READY'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.github_artifact_name }}
+          path: ${{ steps.package.outputs.package_dir }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Download persisted Android Artifact
+        id: download
+        if: steps.upload.outputs.artifact-id != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.package.outputs.github_artifact_name }}
+          path: ${{ runner.temp }}/okane-android-artifact-download
+
+      - name: Verify persisted Android Artifact package
+        id: persistence
+        if: steps.upload.outputs.artifact-id != ''
+        shell: bash
+        env:
+          DOWNLOAD_DIR: ${{ runner.temp }}/okane-android-artifact-download
+
+          ARTIFACT_FILE: ${{ steps.package.outputs.artifact_file }}
+          CHECKSUM_FILE: ${{ steps.package.outputs.checksum_file }}
+          PROVENANCE_FILE: ${{ steps.package.outputs.provenance_file }}
+
+          EXPECTED_ARTIFACT_SHA256: ${{ steps.provenance.outputs.artifact_sha256 }}
+          EXPECTED_PROVENANCE_SHA256: ${{ steps.provenance.outputs.provenance_sha256 }}
+
+          EXPECTED_ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
+          EXPECTED_SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
+          EXPECTED_APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
+
+          UPLOAD_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          UPLOAD_ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          UPLOAD_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+          }
+
+          fail() {
+            local state="$1"
+            local message="$2"
+
+            emit "state" "$state"
+
+            echo "::error title=${state}::${message}"
+            exit 1
+          }
+
+          if [[ -z "${UPLOAD_ARTIFACT_ID:-}" ||
+                -z "${UPLOAD_ARTIFACT_URL:-}" ||
+                -z "${UPLOAD_ARTIFACT_DIGEST:-}" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_UPLOAD_INVALID" \
+              "GitHub Artifact upload did not return the expected immutable artifact identity."
+          fi
+
+          if [[ ! "$UPLOAD_ARTIFACT_DIGEST" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            fail \
+              "ANDROID_ARTIFACT_UPLOAD_INVALID" \
+              "GitHub Artifact digest is not a valid SHA-256 value."
+          fi
+
+          for expected_file in \
+            "$ARTIFACT_FILE" \
+            "$CHECKSUM_FILE" \
+            "$PROVENANCE_FILE"; do
+            if [[ ! -f "${DOWNLOAD_DIR}/${expected_file}" ]]; then
+              fail \
+                "ANDROID_ARTIFACT_PERSISTENCE_INVALID" \
+                "Downloaded GitHub Artifact is missing '${expected_file}'."
+            fi
+          done
+
+          mapfile -t downloaded_files < <(
+            find "$DOWNLOAD_DIR" \
+              -maxdepth 1 \
+              -type f \
+              -printf '%f\n' |
+              sort
+          )
+
+          if [[ "${#downloaded_files[@]}" -ne 3 ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PERSISTENCE_INVALID" \
+              "Downloaded GitHub Artifact must contain exactly three certified files."
+          fi
+
+          if ! (
+            cd "$DOWNLOAD_DIR"
+            sha256sum -c "$CHECKSUM_FILE" >/dev/null
+          ); then
+            fail \
+              "ANDROID_ARTIFACT_PERSISTENCE_INTEGRITY_MISMATCH" \
+              "Downloaded Android artifact does not match its persisted checksum."
+          fi
+
+          downloaded_artifact_sha256="$(
+            sha256sum "${DOWNLOAD_DIR}/${ARTIFACT_FILE}" |
+              awk '{print $1}'
+          )"
+
+          if [[ "$downloaded_artifact_sha256" != "$EXPECTED_ARTIFACT_SHA256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PERSISTENCE_INTEGRITY_MISMATCH" \
+              "Downloaded Android artifact SHA-256 differs from CP-6."
+          fi
+
+          downloaded_provenance_sha256="$(
+            sha256sum "${DOWNLOAD_DIR}/${PROVENANCE_FILE}" |
+              awk '{print $1}'
+          )"
+
+          if [[ "$downloaded_provenance_sha256" != "$EXPECTED_PROVENANCE_SHA256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_PERSISTENCE_INTEGRITY_MISMATCH" \
+              "Downloaded provenance SHA-256 differs from CP-6."
+          fi
+
+          if ! jq -e \
+            --arg environment "$EXPECTED_ENVIRONMENT" \
+            --arg source_sha "$EXPECTED_SOURCE_SHA" \
+            --arg application_id "$EXPECTED_APPLICATION_ID" \
+            --arg artifact_sha256 "$EXPECTED_ARTIFACT_SHA256" \
+            '
+              .environment == $environment and
+              .source.sha == $source_sha and
+              .android.applicationId == $application_id and
+              .artifact.sha256 == $artifact_sha256
+            ' \
+            "${DOWNLOAD_DIR}/${PROVENANCE_FILE}" \
+            >/dev/null; then
+            fail \
+              "ANDROID_ARTIFACT_PERSISTENCE_INVALID" \
+              "Downloaded provenance manifest no longer matches the certified BUILD identity."
+          fi
+
+          emit "artifact_id" "$UPLOAD_ARTIFACT_ID"
+          emit "artifact_url" "$UPLOAD_ARTIFACT_URL"
+          emit "artifact_digest" "$UPLOAD_ARTIFACT_DIGEST"
+
+          emit "downloaded_artifact_sha256" "$downloaded_artifact_sha256"
+          emit "downloaded_provenance_sha256" "$downloaded_provenance_sha256"
+
+          emit "content_verification" "pass"
+          emit "checksum_verification" "pass"
+          emit "provenance_verification" "pass"
+
+          emit "state" "ANDROID_ARTIFACT_PERSISTENCE_VERIFIED"
+
+      # -----------------------------------------------------------------------
       # Repository postcondition
       # -----------------------------------------------------------------------
 
@@ -1293,6 +1583,26 @@ jobs:
 
           ACTUAL_FLUTTER_TOOLCHAIN: ${{ steps.provenance.outputs.flutter_toolchain }}
           ACTUAL_JAVA_TOOLCHAIN: ${{ steps.provenance.outputs.java_toolchain }}
+
+          PACKAGE_STATE: ${{ steps.package.outputs.state }}
+          PACKAGE_VERIFICATION: ${{ steps.package.outputs.package_verification }}
+          GITHUB_ARTIFACT_NAME: ${{ steps.package.outputs.github_artifact_name }}
+
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+
+          GITHUB_ARTIFACT_ID: ${{ steps.persistence.outputs.artifact_id }}
+          GITHUB_ARTIFACT_URL: ${{ steps.persistence.outputs.artifact_url }}
+          GITHUB_ARTIFACT_DIGEST: ${{ steps.persistence.outputs.artifact_digest }}
+
+          PERSISTENCE_STATE: ${{ steps.persistence.outputs.state }}
+          PERSISTED_CONTENT_VERIFICATION: ${{ steps.persistence.outputs.content_verification }}
+          PERSISTED_CHECKSUM_VERIFICATION: ${{ steps.persistence.outputs.checksum_verification }}
+          PERSISTED_PROVENANCE_VERIFICATION: ${{ steps.persistence.outputs.provenance_verification }}
+
+          PERSISTED_ARTIFACT_SHA256: ${{ steps.persistence.outputs.downloaded_artifact_sha256 }}
+          PERSISTED_PROVENANCE_SHA256: ${{ steps.persistence.outputs.downloaded_provenance_sha256 }}
+
           REPOSITORY_STATE: ${{ steps.repository_state.outputs.state }}
 
           TRIGGER_REF: ${{ github.ref_name }}
@@ -1351,12 +1661,20 @@ jobs:
             final_state="${PROVENANCE_STATE:-ANDROID_PROVENANCE_VERIFICATION_FAILED}"
             status="❌ ${final_state}"
 
+          elif [[ "${PACKAGE_STATE:-}" != "ANDROID_ARTIFACT_PACKAGE_READY" ]]; then
+            final_state="${PACKAGE_STATE:-ANDROID_ARTIFACT_PACKAGE_FAILED}"
+            status="❌ ${final_state}"
+
+          elif [[ "${PERSISTENCE_STATE:-}" != "ANDROID_ARTIFACT_PERSISTENCE_VERIFIED" ]]; then
+            final_state="${PERSISTENCE_STATE:-ANDROID_ARTIFACT_PERSISTENCE_FAILED}"
+            status="❌ ${final_state}"
+
           elif [[ "${REPOSITORY_STATE:-}" != "ANDROID_REPOSITORY_CLEAN" ]]; then
             final_state="${REPOSITORY_STATE:-ANDROID_REPOSITORY_STATE_UNKNOWN}"
             status="❌ ${final_state}"
 
           else
-            final_state="ANDROID_ARTIFACT_PROVENANCE_VERIFIED"
+            final_state="ANDROID_BUILD_CERTIFIED"
             status="✅ ${final_state}"
           fi
 
@@ -1439,6 +1757,26 @@ jobs:
             echo "| Java toolchain | \`$(value_or_na "${ACTUAL_JAVA_TOOLCHAIN:-}")\` |"
             echo ""
 
+            echo "### GitHub Artifact"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Name | \`$(value_or_na "${GITHUB_ARTIFACT_NAME:-}")\` |"
+            echo "| Artifact ID | \`$(value_or_na "${GITHUB_ARTIFACT_ID:-}")\` |"
+            echo "| GitHub archive SHA-256 | \`$(value_or_na "${GITHUB_ARTIFACT_DIGEST:-}")\` |"
+            echo "| Package verification | $(pass_contract_or_na "${PACKAGE_VERIFICATION:-}") |"
+            echo "| Downloaded content | $(pass_contract_or_na "${PERSISTED_CONTENT_VERIFICATION:-}") |"
+            echo "| Downloaded checksum | $(pass_contract_or_na "${PERSISTED_CHECKSUM_VERIFICATION:-}") |"
+            echo "| Downloaded provenance | $(pass_contract_or_na "${PERSISTED_PROVENANCE_VERIFICATION:-}") |"
+            echo "| Persisted artifact SHA-256 | \`$(value_or_na "${PERSISTED_ARTIFACT_SHA256:-}")\` |"
+            echo "| Persisted provenance SHA-256 | \`$(value_or_na "${PERSISTED_PROVENANCE_SHA256:-}")\` |"
+            echo ""
+
+            if [[ -n "${GITHUB_ARTIFACT_URL:-}" ]]; then
+              echo "[Open GitHub Artifact](${GITHUB_ARTIFACT_URL})"
+              echo ""
+            fi
+
             echo "### Execution boundary"
             echo ""
             echo "| Metric | Value |"
@@ -1446,6 +1784,8 @@ jobs:
             echo "| Repository | $(value_or_na "${REPOSITORY_STATE:-}") |"
             echo "| Repository mutation | none |"
             echo "| Signing material persistence | none |"
-            echo "| GitHub Artifact upload | not executed |"
+            echo "| GitHub Artifact upload | $(value_or_na "${UPLOAD_OUTCOME:-}") |"
+            echo "| GitHub Artifact download | $(value_or_na "${DOWNLOAD_OUTCOME:-}") |"
+            echo "| GitHub Artifact retention | repository default |"
             echo "| Publication | not executed |"
           } >> "$GITHUB_STEP_SUMMARY"
