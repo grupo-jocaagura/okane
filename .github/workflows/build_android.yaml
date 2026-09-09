@@ -1,4 +1,4 @@
-name: Android BUILD Profile Resolution
+name: Android BUILD
 
 on:
   workflow_dispatch:
@@ -19,10 +19,14 @@ jobs:
   resolve_android_profile:
     name: Resolve Android BUILD profile
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     environment: ${{ inputs.environment }}
 
     steps:
+      # -----------------------------------------------------------------------
+      # CP-3 — Canonical environment/source resolution
+      # -----------------------------------------------------------------------
+
       - name: Validate requested environment and canonical profile
         id: validate_profile
         shell: bash
@@ -143,14 +147,6 @@ jobs:
           emit "application_id" "$application_id"
           emit "artifact_type" "$artifact_type"
 
-          echo "Android BUILD profile resolved:"
-          echo "  environment:    ${environment}"
-          echo "  source branch:  ${source_branch}"
-          echo "  Android flavor: ${android_flavor}"
-          echo "  OKANE_ENV:      ${okane_env}"
-          echo "  applicationId:  ${application_id}"
-          echo "  artifact type:  ${artifact_type}"
-
       - name: Checkout exact authorized source SHA
         if: steps.validate_profile.outputs.status == 'valid'
         uses: actions/checkout@v5
@@ -169,7 +165,6 @@ jobs:
           set -euo pipefail
 
           source_sha="$(git rev-parse HEAD)"
-
           echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
 
           if [[ "$source_sha" != "$TRIGGER_SHA" ]]; then
@@ -183,9 +178,295 @@ jobs:
 
           echo "state=ANDROID_SOURCE_SHA_RESOLVED" >> "$GITHUB_OUTPUT"
 
-          echo "Authorized source SHA: ${source_sha}"
+      # -----------------------------------------------------------------------
+      # CP-4 — Ephemeral Android signing reconstruction
+      # -----------------------------------------------------------------------
 
-      - name: Write Android BUILD profile summary
+      - name: Set up Java 17
+        if: >-
+          steps.validate_profile.outputs.status == 'valid' &&
+          steps.resolve_sha.outputs.state == 'ANDROID_SOURCE_SHA_RESOLVED'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Reconstruct and verify Android signing identity
+        id: signing
+        if: >-
+          steps.validate_profile.outputs.status == 'valid' &&
+          steps.resolve_sha.outputs.state == 'ANDROID_SOURCE_SHA_RESOLVED'
+        shell: bash
+        env:
+          ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
+
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+          CONFIGURED_KEY_ALIAS: ${{ vars.ANDROID_KEY_ALIAS }}
+          CONFIGURED_CERT_SHA1: ${{ vars.ANDROID_SIGNING_CERT_SHA1 }}
+          CONFIGURED_CERT_SHA256: ${{ vars.ANDROID_SIGNING_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+          }
+
+          fail() {
+            local state="$1"
+            local message="$2"
+
+            emit "state" "$state"
+
+            echo "::error title=${state}::${message}"
+            exit 1
+          }
+
+          normalize_fingerprint() {
+            printf '%s' "$1" |
+              tr '[:lower:]' '[:upper:]' |
+              tr -d '[:space:]:-'
+          }
+
+          signing_dir="${RUNNER_TEMP}/okane-android-signing"
+          keystore_path="${signing_dir}/signing-keystore"
+          certificate_path="${signing_dir}/certificate.pem"
+          probe_dir="${signing_dir}/probe"
+          unsigned_probe="${signing_dir}/unsigned-probe.jar"
+          signed_probe="${signing_dir}/signed-probe.jar"
+
+          cleanup() {
+            rm -rf "$signing_dir"
+          }
+
+          # Ensure temporary signing material is removed on every exit path.
+          trap cleanup EXIT
+
+          umask 077
+          mkdir -p "$signing_dir"
+
+          # Canonical signing identities are intentionally encoded in the
+          # workflow. GitHub Environment variables must agree with this
+          # repository-owned contract.
+          case "$ENVIRONMENT" in
+            dev)
+              canonical_alias='okane-dev'
+              canonical_sha1='B9:12:6E:1F:BD:69:74:40:31:25:24:FA:C6:62:96:5A:38:08:94:EC'
+              canonical_sha256='4B:C2:62:50:DA:A2:49:3D:41:1D:7F:2D:BD:21:25:18:90:EF:7B:55:94:FB:3C:6B:93:FA:77:D4:E6:C1:0B:A2'
+              ;;
+
+            qa)
+              canonical_alias='okane-qa'
+              canonical_sha1='08:C2:2B:9B:4E:1D:B3:F9:0B:67:E3:4E:1F:07:D4:09:2A:83:DF:77'
+              canonical_sha256='4B:98:74:79:A8:60:2B:C2:D3:A5:1A:4A:F0:EE:3E:E0:35:FE:58:07:74:66:5C:3A:61:D6:26:CC:82:88:C1:E5'
+              ;;
+
+            prod)
+              canonical_alias='okane-upload'
+              canonical_sha1='22:F2:92:D7:18:CB:21:E2:C7:D8:A6:0E:61:54:53:A0:3A:24:85:DD'
+              canonical_sha256='92:7C:55:81:6B:B5:9C:A6:E5:18:23:BA:16:99:02:C9:A9:63:BF:00:F5:4E:96:67:AE:14:64:B9:10:75:33:C8'
+              ;;
+
+            *)
+              fail \
+                "ANDROID_SIGNING_CONFIG_INVALID" \
+                "No canonical signing identity exists for environment '${ENVIRONMENT}'."
+              ;;
+          esac
+
+          if [[ -z "${CONFIGURED_KEY_ALIAS:-}" ||
+                -z "${CONFIGURED_CERT_SHA1:-}" ||
+                -z "${CONFIGURED_CERT_SHA256:-}" ]]; then
+            fail \
+              "ANDROID_SIGNING_CONFIG_INVALID" \
+              "One or more required Android signing variables are missing."
+          fi
+
+          if [[ -z "${KEYSTORE_BASE64:-}" ||
+                -z "${STORE_PASSWORD:-}" ||
+                -z "${KEY_PASSWORD:-}" ]]; then
+            fail \
+              "ANDROID_SIGNING_SECRET_MISSING" \
+              "One or more required Android signing secrets are missing."
+          fi
+
+          if [[ "$CONFIGURED_KEY_ALIAS" != "$canonical_alias" ]]; then
+            fail \
+              "ANDROID_SIGNING_IDENTITY_MISMATCH" \
+              "Configured Android key alias does not match the canonical environment identity."
+          fi
+
+          if [[ \
+            "$(normalize_fingerprint "$CONFIGURED_CERT_SHA1")" != \
+            "$(normalize_fingerprint "$canonical_sha1")" \
+          ]]; then
+            fail \
+              "ANDROID_SIGNING_IDENTITY_MISMATCH" \
+              "Configured SHA-1 fingerprint does not match the canonical environment identity."
+          fi
+
+          if [[ \
+            "$(normalize_fingerprint "$CONFIGURED_CERT_SHA256")" != \
+            "$(normalize_fingerprint "$canonical_sha256")" \
+          ]]; then
+            fail \
+              "ANDROID_SIGNING_IDENTITY_MISMATCH" \
+              "Configured SHA-256 fingerprint does not match the canonical environment identity."
+          fi
+
+          if ! printf '%s' "$KEYSTORE_BASE64" |
+            base64 --decode > "$keystore_path"; then
+            fail \
+              "ANDROID_KEYSTORE_INVALID" \
+              "Android keystore Base64 payload could not be decoded."
+          fi
+
+          if [[ ! -s "$keystore_path" ]]; then
+            fail \
+              "ANDROID_KEYSTORE_INVALID" \
+              "Decoded Android keystore is empty."
+          fi
+
+          if ! keytool \
+            -list \
+            -keystore "$keystore_path" \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$canonical_alias" \
+            >/dev/null 2>&1; then
+            fail \
+              "ANDROID_KEYSTORE_INVALID" \
+              "Keystore cannot be opened with the configured store password and alias."
+          fi
+
+          if ! keytool \
+            -exportcert \
+            -rfc \
+            -keystore "$keystore_path" \
+            -storepass "$STORE_PASSWORD" \
+            -alias "$canonical_alias" \
+            > "$certificate_path" 2>/dev/null; then
+            fail \
+              "ANDROID_KEYSTORE_INVALID" \
+              "Certificate could not be exported from the reconstructed keystore."
+          fi
+
+          actual_sha1="$(
+            openssl x509 \
+              -in "$certificate_path" \
+              -noout \
+              -fingerprint \
+              -sha1 |
+              sed 's/^[^=]*=//'
+          )"
+
+          actual_sha256="$(
+            openssl x509 \
+              -in "$certificate_path" \
+              -noout \
+              -fingerprint \
+              -sha256 |
+              sed 's/^[^=]*=//'
+          )"
+
+          if [[ \
+            "$(normalize_fingerprint "$actual_sha1")" != \
+            "$(normalize_fingerprint "$canonical_sha1")" \
+          ]]; then
+            fail \
+              "ANDROID_SIGNING_IDENTITY_MISMATCH" \
+              "Reconstructed keystore SHA-1 fingerprint does not match the canonical signing identity."
+          fi
+
+          if [[ \
+            "$(normalize_fingerprint "$actual_sha256")" != \
+            "$(normalize_fingerprint "$canonical_sha256")" \
+          ]]; then
+            fail \
+              "ANDROID_SIGNING_IDENTITY_MISMATCH" \
+              "Reconstructed keystore SHA-256 fingerprint does not match the canonical signing identity."
+          fi
+
+          # Prove that the configured key password actually unlocks the private
+          # key. Reading/exporting the certificate alone is not sufficient.
+          mkdir -p "$probe_dir"
+
+          printf '%s\n' \
+            'Okane Android signing private-key usability probe.' \
+            > "${probe_dir}/payload.txt"
+
+          jar \
+            --create \
+            --file "$unsigned_probe" \
+            -C "$probe_dir" \
+            payload.txt
+
+          if ! jarsigner \
+            -keystore "$keystore_path" \
+            -storepass "$STORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -signedjar "$signed_probe" \
+            "$unsigned_probe" \
+            "$canonical_alias" \
+            >/dev/null 2>&1; then
+            fail \
+              "ANDROID_PRIVATE_KEY_UNUSABLE" \
+              "The configured private key could not sign the temporary probe."
+          fi
+
+          if ! jarsigner \
+            -verify \
+            "$signed_probe" \
+            >/dev/null 2>&1; then
+            fail \
+              "ANDROID_SIGNATURE_PROBE_FAILED" \
+              "The temporary signature probe could not be verified."
+          fi
+
+          emit "alias" "$canonical_alias"
+          emit "sha1" "$actual_sha1"
+          emit "sha256" "$actual_sha256"
+          emit "certificate_match" "pass"
+          emit "private_key_probe" "pass"
+
+          # Explicit successful cleanup. The EXIT trap remains as a fallback
+          # for all previous failure paths.
+          cleanup
+          trap - EXIT
+
+          if [[ -e "$signing_dir" ]]; then
+            fail \
+              "ANDROID_SIGNING_CLEANUP_FAILED" \
+              "Temporary signing material remains after cleanup."
+          fi
+
+          emit "cleanup" "pass"
+          emit "state" "ANDROID_SIGNING_RECONSTRUCTED"
+
+      - name: Verify repository remains unmodified
+        id: repository_state
+        if: steps.signing.outputs.state == 'ANDROID_SIGNING_RECONSTRUCTED'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "state=ANDROID_REPOSITORY_MUTATION_DETECTED" >> "$GITHUB_OUTPUT"
+
+            echo \
+              "::error title=ANDROID_REPOSITORY_MUTATION_DETECTED::Signing reconstruction modified the checked-out repository."
+
+            exit 1
+          fi
+
+          echo "state=ANDROID_REPOSITORY_CLEAN" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Evidence
+      # -----------------------------------------------------------------------
+
+      - name: Write Android BUILD summary
         if: always()
         shell: bash
         env:
@@ -205,6 +486,17 @@ jobs:
           SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
           SOURCE_SHA_STATE: ${{ steps.resolve_sha.outputs.state }}
 
+          SIGNING_OUTCOME: ${{ steps.signing.outcome }}
+          SIGNING_STATE: ${{ steps.signing.outputs.state }}
+          SIGNING_ALIAS: ${{ steps.signing.outputs.alias }}
+          SIGNING_SHA1: ${{ steps.signing.outputs.sha1 }}
+          SIGNING_SHA256: ${{ steps.signing.outputs.sha256 }}
+          CERTIFICATE_MATCH: ${{ steps.signing.outputs.certificate_match }}
+          PRIVATE_KEY_PROBE: ${{ steps.signing.outputs.private_key_probe }}
+          SIGNING_CLEANUP: ${{ steps.signing.outputs.cleanup }}
+
+          REPOSITORY_STATE: ${{ steps.repository_state.outputs.state }}
+
           TRIGGER_REF: ${{ github.ref_name }}
           TRIGGER_REF_TYPE: ${{ github.ref_type }}
           TRIGGER_SHA: ${{ github.sha }}
@@ -219,25 +511,37 @@ jobs:
             fi
           }
 
+          pass_or_na() {
+            if [[ "${1:-}" == "pass" ]]; then
+              printf '✅ PASS'
+            else
+              printf 'N/A'
+            fi
+          }
+
           if [[ "${PROFILE_STATUS:-}" != "valid" ]]; then
             final_state="${PROFILE_STATE:-ANDROID_PROFILE_INVALID}"
             status="❌ ${final_state}"
 
-          elif [[ "${SOURCE_SHA_STATE:-}" == "ANDROID_SOURCE_SHA_RESOLVED" ]]; then
-            final_state="ANDROID_PROFILE_RESOLVED"
-            status="✅ ${final_state}"
+          elif [[ "${SOURCE_SHA_STATE:-}" != "ANDROID_SOURCE_SHA_RESOLVED" ]]; then
+            final_state="${SOURCE_SHA_STATE:-ANDROID_SOURCE_RESOLUTION_FAILED}"
+            status="❌ ${final_state}"
 
-          elif [[ -n "${SOURCE_SHA_STATE:-}" ]]; then
-            final_state="$SOURCE_SHA_STATE"
+          elif [[ "${SIGNING_STATE:-}" != "ANDROID_SIGNING_RECONSTRUCTED" ]]; then
+            final_state="${SIGNING_STATE:-ANDROID_SIGNING_RECONSTRUCTION_FAILED}"
+            status="❌ ${final_state}"
+
+          elif [[ "${REPOSITORY_STATE:-}" != "ANDROID_REPOSITORY_CLEAN" ]]; then
+            final_state="${REPOSITORY_STATE:-ANDROID_REPOSITORY_STATE_UNKNOWN}"
             status="❌ ${final_state}"
 
           else
-            final_state="ANDROID_SOURCE_RESOLUTION_FAILED"
-            status="❌ ${final_state}"
+            final_state="ANDROID_SIGNING_RECONSTRUCTED"
+            status="✅ ${final_state}"
           fi
 
           {
-            echo "## Android BUILD Profile"
+            echo "## Android BUILD"
             echo ""
             echo "**Status:** ${status}"
             echo ""
@@ -264,11 +568,26 @@ jobs:
             echo "| Artifact policy | \`$(value_or_na "${PROFILE_ARTIFACT_TYPE:-}")\` |"
             echo ""
 
+            echo "### Signing"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Alias | \`$(value_or_na "${SIGNING_ALIAS:-}")\` |"
+            echo "| SHA-1 | \`$(value_or_na "${SIGNING_SHA1:-}")\` |"
+            echo "| SHA-256 | \`$(value_or_na "${SIGNING_SHA256:-}")\` |"
+            echo "| Certificate identity | $(pass_or_na "${CERTIFICATE_MATCH:-}") |"
+            echo "| Private-key probe | $(pass_or_na "${PRIVATE_KEY_PROBE:-}") |"
+            echo "| Ephemeral cleanup | $(pass_or_na "${SIGNING_CLEANUP:-}") |"
+            echo ""
+
             echo "### Execution boundary"
             echo ""
             echo "| Metric | Value |"
             echo "| --- | --- |"
+            echo "| Repository | $(value_or_na "${REPOSITORY_STATE:-}") |"
             echo "| Repository mutation | none |"
-            echo "| Signing | not accessed |"
-            echo "| Artifact generation | not executed |"
+            echo "| Signing material persistence | none |"
+            echo "| APK generation | not executed |"
+            echo "| AAB generation | not executed |"
+            echo "| Artifact upload | not executed |"
           } >> "$GITHUB_STEP_SUMMARY"
