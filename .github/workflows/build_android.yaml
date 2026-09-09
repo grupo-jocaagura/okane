@@ -854,12 +854,364 @@ jobs:
           emit "state" "ANDROID_ARTIFACT_GENERATED"
 
       # -----------------------------------------------------------------------
+      # CP-6 — Artifact integrity and build provenance
+      # -----------------------------------------------------------------------
+
+      - name: Generate and verify artifact integrity and provenance
+        id: provenance
+        if: steps.artifact.outputs.state == 'ANDROID_ARTIFACT_GENERATED'
+        shell: bash
+        env:
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
+          ARTIFACT_SIZE: ${{ steps.artifact.outputs.artifact_size }}
+          ARTIFACT_TYPE: ${{ steps.artifact.outputs.artifact_type }}
+
+          ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
+          SOURCE_BRANCH: ${{ steps.validate_profile.outputs.source_branch }}
+          SOURCE_SHA: ${{ steps.resolve_sha.outputs.source_sha }}
+          TRIGGER_SHA: ${{ github.sha }}
+
+          ANDROID_FLAVOR: ${{ steps.validate_profile.outputs.android_flavor }}
+          APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
+
+          APP_VERSION: ${{ steps.version.outputs.flutter_version }}
+          SEMVER: ${{ steps.version.outputs.semver }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
+
+          SIGNING_ALIAS: ${{ steps.artifact.outputs.signing_alias }}
+          SIGNING_SHA256: ${{ steps.artifact.outputs.signing_sha256 }}
+
+          APPLICATION_ID_CHECK: ${{ steps.artifact.outputs.application_id_check }}
+          VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
+          SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
+          SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
+
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+        run: |
+          set -euo pipefail
+
+          emit() {
+            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+          }
+
+          fail() {
+            local state="$1"
+            local message="$2"
+
+            emit "state" "$state"
+
+            echo "::error title=${state}::${message}"
+            exit 1
+          }
+
+          if [[ ! -f "$ARTIFACT_PATH" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_HASH_FAILED" \
+              "The certified Android artifact no longer exists."
+          fi
+
+          if [[ "$SOURCE_SHA" != "$TRIGGER_SHA" ]]; then
+            fail \
+              "ANDROID_PROVENANCE_INVALID" \
+              "Artifact source SHA is not bound to the authorized trigger SHA."
+          fi
+
+          actual_size="$(stat -c '%s' "$ARTIFACT_PATH")"
+
+          if [[ "$actual_size" != "$ARTIFACT_SIZE" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_INTEGRITY_MISMATCH" \
+              "Artifact size changed after CP-5 verification."
+          fi
+
+          provenance_dir="${RUNNER_TEMP}/okane-android-provenance"
+          artifact_name="$(basename "$ARTIFACT_PATH")"
+
+          checksum_name="${artifact_name}.sha256"
+          provenance_name="${artifact_name}.provenance.json"
+
+          checksum_path="${provenance_dir}/${checksum_name}"
+          provenance_path="${provenance_dir}/${provenance_name}"
+
+          rm -rf "$provenance_dir"
+
+          umask 077
+          mkdir -p "$provenance_dir"
+
+          # -------------------------------------------------------------------
+          # Artifact digest
+          # -------------------------------------------------------------------
+
+          artifact_sha256="$(
+            sha256sum "$ARTIFACT_PATH" |
+              awk '{print $1}'
+          )"
+
+          if [[ -z "$artifact_sha256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_HASH_FAILED" \
+              "Artifact SHA-256 could not be calculated."
+          fi
+
+          printf '%s  %s\n' \
+            "$artifact_sha256" \
+            "$artifact_name" \
+            > "$checksum_path"
+
+          # -------------------------------------------------------------------
+          # Resolve actual toolchain
+          # -------------------------------------------------------------------
+
+          flutter_toolchain_version="$(
+            flutter --version --machine |
+              jq -r '.frameworkVersion // empty'
+          )"
+
+          if [[ "$flutter_toolchain_version" != "3.47.0" ]]; then
+            fail \
+              "ANDROID_PROVENANCE_INVALID" \
+              "Resolved Flutter toolchain is not the canonical 3.47.0 toolchain."
+          fi
+
+          java_version="$(
+            java -XshowSettings:properties -version 2>&1 |
+              sed -n \
+                's/^[[:space:]]*java.version = //p' |
+              head -n 1
+          )"
+
+          java_major="${java_version%%.*}"
+
+          if [[ "$java_major" != "17" ]]; then
+            fail \
+              "ANDROID_PROVENANCE_INVALID" \
+              "Resolved Java toolchain is not Java 17."
+          fi
+
+          # -------------------------------------------------------------------
+          # Provenance manifest
+          # -------------------------------------------------------------------
+
+          if ! jq -n -S \
+            --arg schema "jocaagura.android-build-provenance.v1" \
+            --arg repository "$REPOSITORY" \
+            --arg environment "$ENVIRONMENT" \
+            --arg source_branch "$SOURCE_BRANCH" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg app_version "$APP_VERSION" \
+            --arg semver "$SEMVER" \
+            --argjson build_number "$BUILD_NUMBER" \
+            --arg flavor "$ANDROID_FLAVOR" \
+            --arg application_id "$APPLICATION_ID" \
+            --arg artifact_type "$ARTIFACT_TYPE" \
+            --arg artifact_name "$artifact_name" \
+            --arg artifact_path "$ARTIFACT_PATH" \
+            --argjson artifact_size "$actual_size" \
+            --arg artifact_sha256 "$artifact_sha256" \
+            --arg signing_alias "$SIGNING_ALIAS" \
+            --arg signing_sha256 "$SIGNING_SHA256" \
+            --arg application_id_check "$APPLICATION_ID_CHECK" \
+            --arg version_check "$VERSION_CHECK" \
+            --arg signature_check "$SIGNATURE_CHECK" \
+            --arg signer_match "$SIGNER_MATCH" \
+            --arg flutter_toolchain "$flutter_toolchain_version" \
+            --arg java_toolchain "$java_version" \
+            --arg run_id "$RUN_ID" \
+            --arg run_attempt "$RUN_ATTEMPT" \
+            --arg workflow "$WORKFLOW_NAME" \
+            '{
+              schema: $schema,
+              repository: $repository,
+              environment: $environment,
+
+              source: {
+                branch: $source_branch,
+                sha: $source_sha
+              },
+
+              version: {
+                app: $app_version,
+                semver: $semver,
+                buildNumber: $build_number
+              },
+
+              android: {
+                flavor: $flavor,
+                applicationId: $application_id,
+                artifactType: $artifact_type,
+                buildMode: "release"
+              },
+
+              artifact: {
+                name: $artifact_name,
+                path: $artifact_path,
+                sizeBytes: $artifact_size,
+                sha256: $artifact_sha256
+              },
+
+              signing: {
+                alias: $signing_alias,
+                certificateSha256: $signing_sha256
+              },
+
+              verification: {
+                applicationId: $application_id_check,
+                version: $version_check,
+                signature: $signature_check,
+                canonicalSigner: $signer_match
+              },
+
+              toolchain: {
+                flutter: $flutter_toolchain,
+                java: $java_toolchain
+              },
+
+              github: {
+                runId: $run_id,
+                runAttempt: $run_attempt,
+                workflow: $workflow
+              }
+            }' \
+            > "$provenance_path"; then
+            fail \
+              "ANDROID_PROVENANCE_GENERATION_FAILED" \
+              "Android artifact provenance manifest could not be generated."
+          fi
+
+          # -------------------------------------------------------------------
+          # Validate manifest against canonical runtime state
+          # -------------------------------------------------------------------
+
+          if ! jq -e \
+            --arg schema "jocaagura.android-build-provenance.v1" \
+            --arg repository "$REPOSITORY" \
+            --arg environment "$ENVIRONMENT" \
+            --arg source_branch "$SOURCE_BRANCH" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg app_version "$APP_VERSION" \
+            --arg semver "$SEMVER" \
+            --argjson build_number "$BUILD_NUMBER" \
+            --arg flavor "$ANDROID_FLAVOR" \
+            --arg application_id "$APPLICATION_ID" \
+            --arg artifact_type "$ARTIFACT_TYPE" \
+            --arg artifact_name "$artifact_name" \
+            --arg artifact_sha256 "$artifact_sha256" \
+            --arg signing_alias "$SIGNING_ALIAS" \
+            --arg signing_sha256 "$SIGNING_SHA256" \
+            --arg application_id_check "$APPLICATION_ID_CHECK" \
+            --arg version_check "$VERSION_CHECK" \
+            --arg signature_check "$SIGNATURE_CHECK" \
+            --arg signer_match "$SIGNER_MATCH" \
+            --arg flutter_toolchain "$flutter_toolchain_version" \
+            --arg java_toolchain "$java_version" \
+            '
+              .schema == $schema and
+              .repository == $repository and
+              .environment == $environment and
+
+              .source.branch == $source_branch and
+              .source.sha == $source_sha and
+
+              .version.app == $app_version and
+              .version.semver == $semver and
+              .version.buildNumber == $build_number and
+
+              .android.flavor == $flavor and
+              .android.applicationId == $application_id and
+              .android.artifactType == $artifact_type and
+              .android.buildMode == "release" and
+
+              .artifact.name == $artifact_name and
+              .artifact.sha256 == $artifact_sha256 and
+
+              .signing.alias == $signing_alias and
+              .signing.certificateSha256 == $signing_sha256 and
+
+              .verification.applicationId == $application_id_check and
+              .verification.version == $version_check and
+              .verification.signature == $signature_check and
+              .verification.canonicalSigner == $signer_match and
+
+              .toolchain.flutter == $flutter_toolchain and
+              .toolchain.java == $java_toolchain
+            ' \
+            "$provenance_path" \
+            >/dev/null; then
+            fail \
+              "ANDROID_PROVENANCE_INVALID" \
+              "Generated provenance manifest does not match the certified BUILD state."
+          fi
+
+          # -------------------------------------------------------------------
+          # Verify artifact has not changed since hashing
+          # -------------------------------------------------------------------
+
+          artifact_dir="$(dirname "$ARTIFACT_PATH")"
+
+          if ! (
+            cd "$artifact_dir"
+            sha256sum -c "$checksum_path" >/dev/null
+          ); then
+            fail \
+              "ANDROID_ARTIFACT_INTEGRITY_MISMATCH" \
+              "Artifact no longer matches its generated SHA-256 checksum."
+          fi
+
+          artifact_sha256_after="$(
+            sha256sum "$ARTIFACT_PATH" |
+              awk '{print $1}'
+          )"
+
+          if [[ "$artifact_sha256_after" != "$artifact_sha256" ]]; then
+            fail \
+              "ANDROID_ARTIFACT_INTEGRITY_MISMATCH" \
+              "Artifact changed during provenance generation."
+          fi
+
+          provenance_sha256="$(
+            sha256sum "$provenance_path" |
+              awk '{print $1}'
+          )"
+
+          if [[ -z "$provenance_sha256" ]]; then
+            fail \
+              "ANDROID_PROVENANCE_GENERATION_FAILED" \
+              "Provenance SHA-256 could not be calculated."
+          fi
+
+          # -------------------------------------------------------------------
+          # Outputs for CP-7
+          # -------------------------------------------------------------------
+
+          emit "artifact_sha256" "$artifact_sha256"
+
+          emit "checksum_name" "$checksum_name"
+          emit "checksum_path" "$checksum_path"
+
+          emit "provenance_name" "$provenance_name"
+          emit "provenance_path" "$provenance_path"
+          emit "provenance_sha256" "$provenance_sha256"
+
+          emit "checksum_verification" "pass"
+          emit "provenance_manifest" "pass"
+          emit "source_binding" "pass"
+          emit "signing_binding" "pass"
+          emit "artifact_immutable" "pass"
+
+          emit "flutter_toolchain" "$flutter_toolchain_version"
+          emit "java_toolchain" "$java_version"
+
+          emit "state" "ANDROID_ARTIFACT_PROVENANCE_VERIFIED"
+      # -----------------------------------------------------------------------
       # Repository postcondition
       # -----------------------------------------------------------------------
 
       - name: Verify repository remains unmodified
         id: repository_state
-        if: steps.artifact.outputs.state == 'ANDROID_ARTIFACT_GENERATED'
+        if: steps.provenance.outputs.state == 'ANDROID_ARTIFACT_PROVENANCE_VERIFIED'
         shell: bash
         run: |
           set -euo pipefail
