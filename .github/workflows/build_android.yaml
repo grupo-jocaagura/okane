@@ -1276,7 +1276,7 @@ jobs:
           VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
           SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
           SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
-                    PROVENANCE_STATE: ${{ steps.provenance.outputs.state }}
+          PROVENANCE_STATE: ${{ steps.provenance.outputs.state }}
 
           ARTIFACT_SHA256: ${{ steps.provenance.outputs.artifact_sha256 }}
 
