@@ -1276,7 +1276,23 @@ jobs:
           VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
           SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
           SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
+                    PROVENANCE_STATE: ${{ steps.provenance.outputs.state }}
 
+          ARTIFACT_SHA256: ${{ steps.provenance.outputs.artifact_sha256 }}
+
+          CHECKSUM_NAME: ${{ steps.provenance.outputs.checksum_name }}
+          CHECKSUM_VERIFICATION: ${{ steps.provenance.outputs.checksum_verification }}
+
+          PROVENANCE_NAME: ${{ steps.provenance.outputs.provenance_name }}
+          PROVENANCE_SHA256: ${{ steps.provenance.outputs.provenance_sha256 }}
+          PROVENANCE_MANIFEST: ${{ steps.provenance.outputs.provenance_manifest }}
+
+          SOURCE_BINDING: ${{ steps.provenance.outputs.source_binding }}
+          SIGNING_BINDING: ${{ steps.provenance.outputs.signing_binding }}
+          ARTIFACT_IMMUTABLE: ${{ steps.provenance.outputs.artifact_immutable }}
+
+          ACTUAL_FLUTTER_TOOLCHAIN: ${{ steps.provenance.outputs.flutter_toolchain }}
+          ACTUAL_JAVA_TOOLCHAIN: ${{ steps.provenance.outputs.java_toolchain }}
           REPOSITORY_STATE: ${{ steps.repository_state.outputs.state }}
 
           TRIGGER_REF: ${{ github.ref_name }}
@@ -1331,12 +1347,16 @@ jobs:
             final_state="${ARTIFACT_STATE:-ANDROID_ARTIFACT_GENERATION_FAILED}"
             status="❌ ${final_state}"
 
+          elif [[ "${PROVENANCE_STATE:-}" != "ANDROID_ARTIFACT_PROVENANCE_VERIFIED" ]]; then
+            final_state="${PROVENANCE_STATE:-ANDROID_PROVENANCE_VERIFICATION_FAILED}"
+            status="❌ ${final_state}"
+
           elif [[ "${REPOSITORY_STATE:-}" != "ANDROID_REPOSITORY_CLEAN" ]]; then
             final_state="${REPOSITORY_STATE:-ANDROID_REPOSITORY_STATE_UNKNOWN}"
             status="❌ ${final_state}"
 
           else
-            final_state="ANDROID_ARTIFACT_GENERATED"
+            final_state="ANDROID_ARTIFACT_PROVENANCE_VERIFIED"
             status="✅ ${final_state}"
           fi
 
@@ -1400,6 +1420,23 @@ jobs:
             echo "| Version metadata | $(pass_contract_or_na "${VERSION_CHECK:-}") |"
             echo "| Signature | $(pass_contract_or_na "${SIGNATURE_CHECK:-}") |"
             echo "| Canonical signer | $(pass_contract_or_na "${SIGNER_MATCH:-}") |"
+            echo ""
+
+            echo "### Integrity & provenance"
+            echo ""
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| Artifact SHA-256 | \`$(value_or_na "${ARTIFACT_SHA256:-}")\` |"
+            echo "| Checksum file | \`$(value_or_na "${CHECKSUM_NAME:-}")\` |"
+            echo "| Checksum verification | $(pass_contract_or_na "${CHECKSUM_VERIFICATION:-}") |"
+            echo "| Provenance manifest | \`$(value_or_na "${PROVENANCE_NAME:-}")\` |"
+            echo "| Provenance validation | $(pass_contract_or_na "${PROVENANCE_MANIFEST:-}") |"
+            echo "| Provenance SHA-256 | \`$(value_or_na "${PROVENANCE_SHA256:-}")\` |"
+            echo "| Source binding | $(pass_contract_or_na "${SOURCE_BINDING:-}") |"
+            echo "| Signing binding | $(pass_contract_or_na "${SIGNING_BINDING:-}") |"
+            echo "| Artifact immutability | $(pass_contract_or_na "${ARTIFACT_IMMUTABLE:-}") |"
+            echo "| Flutter toolchain | \`$(value_or_na "${ACTUAL_FLUTTER_TOOLCHAIN:-}")\` |"
+            echo "| Java toolchain | \`$(value_or_na "${ACTUAL_JAVA_TOOLCHAIN:-}")\` |"
             echo ""
 
             echo "### Execution boundary"
