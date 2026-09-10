@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Added final production Android App Bundle analysis using a pinned and
+  checksum-verified `bundletool`.
+
+### Changed
+
+- Production AAB application identity and version metadata are now read and
+  validated directly from the generated bundle before provenance and artifact
+  persistence.
+
 ## [1.12.1] - 2026-09-10
 
 ### Added
