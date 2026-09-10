@@ -1211,7 +1211,7 @@ jobs:
 
       - name: Prepare certified GitHub Artifact package
         id: package
-        if: steps.persistence.outputs.state == 'ANDROID_ARTIFACT_PERSISTENCE_VERIFIED'
+        if: steps.provenance.outputs.state == 'ANDROID_ARTIFACT_PROVENANCE_VERIFIED'
         shell: bash
         env:
           ENVIRONMENT: ${{ steps.validate_profile.outputs.environment }}
@@ -1501,7 +1501,7 @@ jobs:
 
       - name: Verify repository remains unmodified
         id: repository_state
-        if: steps.provenance.outputs.state == 'ANDROID_ARTIFACT_PROVENANCE_VERIFIED'
+        if: steps.persistence.outputs.state == 'ANDROID_ARTIFACT_PERSISTENCE_VERIFIED'
         shell: bash
         run: |
           set -euo pipefail
