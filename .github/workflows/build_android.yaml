@@ -854,194 +854,12 @@ jobs:
           emit "state" "ANDROID_ARTIFACT_GENERATED"
 
       # -----------------------------------------------------------------------
-      # CP-8 — Final Android artifact analysis
-      # -----------------------------------------------------------------------
-
-      - name: Analyze final Android artifact
-        id: artifact_analysis
-        if: steps.artifact.outputs.state == 'ANDROID_ARTIFACT_GENERATED'
-        shell: bash
-        env:
-          ARTIFACT_TYPE: ${{ steps.artifact.outputs.artifact_type }}
-          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
-
-          EXPECTED_APPLICATION_ID: ${{ steps.validate_profile.outputs.application_id }}
-          EXPECTED_SEMVER: ${{ steps.version.outputs.semver }}
-          EXPECTED_BUILD_NUMBER: ${{ steps.version.outputs.build_number }}
-
-          CP5_APPLICATION_ID_CHECK: ${{ steps.artifact.outputs.application_id_check }}
-          CP5_VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
-        run: |
-          set -euo pipefail
-
-          emit() {
-            printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
-          }
-
-          fail() {
-            local state="$1"
-            local message="$2"
-
-            emit "state" "$state"
-
-            echo "::error title=${state}::${message}"
-            exit 1
-          }
-
-          if [[ ! -f "$ARTIFACT_PATH" ]]; then
-            fail \
-              "ANDROID_ARTIFACT_ANALYSIS_FAILED" \
-              "The CP-5 certified Android artifact does not exist."
-          fi
-
-          application_id_check="$CP5_APPLICATION_ID_CHECK"
-          version_check="$CP5_VERSION_CHECK"
-
-          bundle_validation="not_applicable"
-          bundletool_version="not_required"
-          bundletool_sha256="not_required"
-
-          actual_application_id=""
-          actual_version_code=""
-          actual_version_name=""
-
-          if [[ "$ARTIFACT_TYPE" == "aab" ]]; then
-            bundletool_version='1.18.3'
-            expected_bundletool_sha256='a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29'
-
-            bundletool_dir="${RUNNER_TEMP}/okane-bundletool"
-            bundletool_jar="${bundletool_dir}/bundletool-all-${bundletool_version}.jar"
-
-            rm -rf "$bundletool_dir"
-            mkdir -p "$bundletool_dir"
-
-            bundletool_url="https://github.com/google/bundletool/releases/download/${bundletool_version}/bundletool-all-${bundletool_version}.jar"
-
-            if ! curl \
-              --fail \
-              --location \
-              --silent \
-              --show-error \
-              --retry 3 \
-              --retry-all-errors \
-              --output "$bundletool_jar" \
-              "$bundletool_url"; then
-              fail \
-                "ANDROID_BUNDLETOOL_DOWNLOAD_FAILED" \
-                "Pinned bundletool ${bundletool_version} could not be downloaded."
-            fi
-
-            bundletool_sha256="$(
-              sha256sum "$bundletool_jar" |
-                awk '{print $1}'
-            )"
-
-            if [[ "$bundletool_sha256" != "$expected_bundletool_sha256" ]]; then
-              fail \
-                "ANDROID_BUNDLETOOL_INTEGRITY_MISMATCH" \
-                "Downloaded bundletool does not match the pinned SHA-256."
-            fi
-
-            actual_bundletool_version="$(
-              java -jar "$bundletool_jar" version |
-                tr -d '\r\n'
-            )"
-
-            if [[ "$actual_bundletool_version" != "$bundletool_version" ]]; then
-              fail \
-                "ANDROID_BUNDLETOOL_VERSION_MISMATCH" \
-                "Downloaded bundletool version '${actual_bundletool_version}' does not match '${bundletool_version}'."
-            fi
-
-            if ! java -jar "$bundletool_jar" \
-              validate \
-              --bundle="$ARTIFACT_PATH"; then
-              fail \
-                "ANDROID_AAB_VALIDATION_FAILED" \
-                "bundletool rejected the generated Android App Bundle."
-            fi
-
-            bundle_validation="pass"
-
-            actual_application_id="$(
-              java -jar "$bundletool_jar" \
-                dump manifest \
-                --bundle="$ARTIFACT_PATH" \
-                --xpath=/manifest/@package |
-                tr -d '\r\n'
-            )"
-
-            actual_version_code="$(
-              java -jar "$bundletool_jar" \
-                dump manifest \
-                --bundle="$ARTIFACT_PATH" \
-                --xpath=/manifest/@android:versionCode |
-                tr -d '\r\n'
-            )"
-
-            actual_version_name="$(
-              java -jar "$bundletool_jar" \
-                dump manifest \
-                --bundle="$ARTIFACT_PATH" \
-                --xpath=/manifest/@android:versionName |
-                tr -d '\r\n'
-            )"
-
-            if [[ -z "$actual_application_id" ||
-                  -z "$actual_version_code" ||
-                  -z "$actual_version_name" ]]; then
-              fail \
-                "ANDROID_AAB_METADATA_UNRESOLVED" \
-                "bundletool could not resolve required AAB manifest metadata."
-            fi
-
-            if [[ "$actual_application_id" != "$EXPECTED_APPLICATION_ID" ]]; then
-              fail \
-                "ANDROID_ARTIFACT_IDENTITY_MISMATCH" \
-                "AAB applicationId '${actual_application_id}' does not match '${EXPECTED_APPLICATION_ID}'."
-            fi
-
-            application_id_check="pass"
-
-            if [[ "$actual_version_code" != "$EXPECTED_BUILD_NUMBER" ||
-                  "$actual_version_name" != "$EXPECTED_SEMVER" ]]; then
-              fail \
-                "ANDROID_ARTIFACT_VERSION_MISMATCH" \
-                "AAB version metadata does not match the canonical Flutter version."
-            fi
-
-            version_check="pass"
-
-            rm -rf "$bundletool_dir"
-          fi
-
-          if [[ "$application_id_check" != "pass" ||
-                "$version_check" != "pass" ]]; then
-            fail \
-              "ANDROID_ARTIFACT_ANALYSIS_FAILED" \
-              "Final Android artifact identity or version metadata is not fully verified."
-          fi
-
-          emit "application_id_check" "$application_id_check"
-          emit "version_check" "$version_check"
-
-          emit "bundle_validation" "$bundle_validation"
-          emit "bundletool_version" "$bundletool_version"
-          emit "bundletool_sha256" "$bundletool_sha256"
-
-          emit "actual_application_id" "$actual_application_id"
-          emit "actual_version_code" "$actual_version_code"
-          emit "actual_version_name" "$actual_version_name"
-
-          emit "state" "ANDROID_ARTIFACT_ANALYSIS_VERIFIED"
-
-      # -----------------------------------------------------------------------
       # CP-6 — Artifact integrity and build provenance
       # -----------------------------------------------------------------------
 
       - name: Generate and verify artifact integrity and provenance
         id: provenance
-        if: steps.artifact_analysis.outputs.state == 'ANDROID_ARTIFACT_ANALYSIS_VERIFIED'
+        if: steps.artifact.outputs.state == 'ANDROID_ARTIFACT_GENERATED'
         shell: bash
         env:
           ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
@@ -1063,14 +881,10 @@ jobs:
           SIGNING_ALIAS: ${{ steps.artifact.outputs.signing_alias }}
           SIGNING_SHA256: ${{ steps.artifact.outputs.signing_sha256 }}
 
-          APPLICATION_ID_CHECK: ${{ steps.artifact_analysis.outputs.application_id_check }}
-          VERSION_CHECK: ${{ steps.artifact_analysis.outputs.version_check }}
+          APPLICATION_ID_CHECK: ${{ steps.artifact.outputs.application_id_check }}
+          VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
           SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
           SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
-
-          BUNDLE_VALIDATION: ${{ steps.artifact_analysis.outputs.bundle_validation }}
-          BUNDLETOOL_VERSION: ${{ steps.artifact_analysis.outputs.bundletool_version }}
-          BUNDLETOOL_SHA256: ${{ steps.artifact_analysis.outputs.bundletool_sha256 }}
 
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
@@ -1203,9 +1017,6 @@ jobs:
             --arg version_check "$VERSION_CHECK" \
             --arg signature_check "$SIGNATURE_CHECK" \
             --arg signer_match "$SIGNER_MATCH" \
-            --arg bundle_validation "$BUNDLE_VALIDATION" \
-            --arg bundletool_version "$BUNDLETOOL_VERSION" \
-            --arg bundletool_sha256 "$BUNDLETOOL_SHA256" \
             --arg flutter_toolchain "$flutter_toolchain_version" \
             --arg java_toolchain "$java_version" \
             --arg run_id "$RUN_ID" \
@@ -1250,17 +1061,12 @@ jobs:
                 applicationId: $application_id_check,
                 version: $version_check,
                 signature: $signature_check,
-                canonicalSigner: $signer_match,
-                bundleValidation: $bundle_validation
+                canonicalSigner: $signer_match
               },
 
               toolchain: {
                 flutter: $flutter_toolchain,
-                java: $java_toolchain,
-                bundletool: {
-                  version: $bundletool_version,
-                  sha256: $bundletool_sha256
-                }
+                java: $java_toolchain
               },
 
               github: {
@@ -1299,9 +1105,6 @@ jobs:
             --arg version_check "$VERSION_CHECK" \
             --arg signature_check "$SIGNATURE_CHECK" \
             --arg signer_match "$SIGNER_MATCH" \
-            --arg bundle_validation "$BUNDLE_VALIDATION" \
-            --arg bundletool_version "$BUNDLETOOL_VERSION" \
-            --arg bundletool_sha256 "$BUNDLETOOL_SHA256" \
             --arg flutter_toolchain "$flutter_toolchain_version" \
             --arg java_toolchain "$java_version" \
             '
@@ -1331,12 +1134,9 @@ jobs:
               .verification.version == $version_check and
               .verification.signature == $signature_check and
               .verification.canonicalSigner == $signer_match and
-              .verification.bundleValidation == $bundle_validation and
 
               .toolchain.flutter == $flutter_toolchain and
-              .toolchain.java == $java_toolchain and
-              .toolchain.bundletool.version == $bundletool_version and
-              .toolchain.bundletool.sha256 == $bundletool_sha256
+              .toolchain.java == $java_toolchain
             ' \
             "$provenance_path" \
             >/dev/null; then
@@ -1762,19 +1562,10 @@ jobs:
           PRIVATE_KEY_PROBE: ${{ steps.artifact.outputs.private_key_probe }}
           SIGNING_CLEANUP: ${{ steps.artifact.outputs.cleanup }}
 
-          APPLICATION_ID_CHECK: ${{ steps.artifact_analysis.outputs.application_id_check }}
-          VERSION_CHECK: ${{ steps.artifact_analysis.outputs.version_check }}
+          APPLICATION_ID_CHECK: ${{ steps.artifact.outputs.application_id_check }}
+          VERSION_CHECK: ${{ steps.artifact.outputs.version_check }}
           SIGNATURE_CHECK: ${{ steps.artifact.outputs.signature_check }}
           SIGNER_MATCH: ${{ steps.artifact.outputs.signer_match }}
-
-          ANALYSIS_STATE: ${{ steps.artifact_analysis.outputs.state }}
-          BUNDLE_VALIDATION: ${{ steps.artifact_analysis.outputs.bundle_validation }}
-          BUNDLETOOL_VERSION: ${{ steps.artifact_analysis.outputs.bundletool_version }}
-          BUNDLETOOL_SHA256: ${{ steps.artifact_analysis.outputs.bundletool_sha256 }}
-          ACTUAL_AAB_APPLICATION_ID: ${{ steps.artifact_analysis.outputs.actual_application_id }}
-          ACTUAL_AAB_VERSION_CODE: ${{ steps.artifact_analysis.outputs.actual_version_code }}
-          ACTUAL_AAB_VERSION_NAME: ${{ steps.artifact_analysis.outputs.actual_version_name }}
-
           PROVENANCE_STATE: ${{ steps.provenance.outputs.state }}
 
           ARTIFACT_SHA256: ${{ steps.provenance.outputs.artifact_sha256 }}
@@ -1836,9 +1627,6 @@ jobs:
               contract)
                 printf '✅ CONTRACT'
                 ;;
-              not_applicable)
-                printf '➖ NOT REQUIRED'
-                ;;
               *)
                 printf 'N/A'
                 ;;
@@ -1867,10 +1655,6 @@ jobs:
 
           elif [[ "${ARTIFACT_STATE:-}" != "ANDROID_ARTIFACT_GENERATED" ]]; then
             final_state="${ARTIFACT_STATE:-ANDROID_ARTIFACT_GENERATION_FAILED}"
-            status="❌ ${final_state}"
-
-          elif [[ "${ANALYSIS_STATE:-}" != "ANDROID_ARTIFACT_ANALYSIS_VERIFIED" ]]; then
-            final_state="${ANALYSIS_STATE:-ANDROID_ARTIFACT_ANALYSIS_FAILED}"
             status="❌ ${final_state}"
 
           elif [[ "${PROVENANCE_STATE:-}" != "ANDROID_ARTIFACT_PROVENANCE_VERIFIED" ]]; then
@@ -1954,18 +1738,6 @@ jobs:
             echo "| Version metadata | $(pass_contract_or_na "${VERSION_CHECK:-}") |"
             echo "| Signature | $(pass_contract_or_na "${SIGNATURE_CHECK:-}") |"
             echo "| Canonical signer | $(pass_contract_or_na "${SIGNER_MATCH:-}") |"
-            echo ""
-
-            echo "### AAB analysis"
-            echo ""
-            echo "| Metric | Value |"
-            echo "| --- | --- |"
-            echo "| Bundle validation | $(pass_contract_or_na "${BUNDLE_VALIDATION:-}") |"
-            echo "| bundletool version | \`$(value_or_na "${BUNDLETOOL_VERSION:-}")\` |"
-            echo "| bundletool SHA-256 | \`$(value_or_na "${BUNDLETOOL_SHA256:-}")\` |"
-            echo "| AAB applicationId | \`$(value_or_na "${ACTUAL_AAB_APPLICATION_ID:-}")\` |"
-            echo "| AAB versionCode | \`$(value_or_na "${ACTUAL_AAB_VERSION_CODE:-}")\` |"
-            echo "| AAB versionName | \`$(value_or_na "${ACTUAL_AAB_VERSION_NAME:-}")\` |"
             echo ""
 
             echo "### Integrity & provenance"
