@@ -42,7 +42,7 @@ class _SplashScreenViewState extends State<SplashScreenView> {
         title: 'Versión 1.11.0',
         autoAdvanceAfter: const Duration(seconds: 3),
         description: 'Inicializando',
-        onEnter: () async => Right<ErrorItem, Unit>(Unit.value),
+        onEnter: () async => const Right<ErrorItem, Unit>(Unit.value),
       ),
       OnboardingStep(
         title: 'Suscribiendo datos',
@@ -58,7 +58,7 @@ class _SplashScreenViewState extends State<SplashScreenView> {
               ErrorItem(title: '$e', code: 'DANGER', description: e.toString()),
             );
           }
-          return Right<ErrorItem, Unit>(Unit.value);
+          return const Right<ErrorItem, Unit>(Unit.value);
         },
       ),
     ];

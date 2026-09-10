@@ -12,19 +12,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [Fixed] for any bug fixes.
 - [Security] in case of vulnerabilities.
 
-# Changelog
+## Unreleased
 
-All notable changes to this project will be documented in this file.
+## [1.12.1] - 2026-09-10
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### Added
 
-- [Added] for new features.
-- [Changed] for changes in existing functionality.
-- [Deprecated] for soon-to-be removed features.
-- [Removed] for now removed features.
-- [Fixed] for any bug fixes.
-- [Security] in case of vulnerabilities.
+- Added explicit Android `dev`, `qa`, and `prod` product flavors with isolated
+  application identities for non-production environments.
+- Added environment-aware Android BUILD resolution using GitHub Environments.
+- Added ephemeral Android signing reconstruction and canonical certificate
+  verification for DEV, QA, and PROD.
+- Added signed environment-specific Android artifact generation.
+- Added SHA-256 integrity verification and internal build provenance manifests.
+- Added verified GitHub Artifact persistence for certified Android build outputs.
+
+### Changed
+
+- Separated Android environment identity from `debug` and `release` build types.
+- Bound Android BUILD execution to the exact authorized source SHA.
+- Defined `develop` as the source authority for DEV/QA builds and `master` as
+  the source authority for PROD builds.
+- Documented the repository VERIFY → VERSION → BUILD → PUBLISH publication
+  discipline.
+
+### Quality
+
+- Certified DEV and QA Android identities coexisting on the same device.
+- Certified environment-specific signing identities and private-key usability.
+- Certified signed DEV and QA release APK generation.
+- Certified artifact application identity, version metadata, signature, and
+  canonical signer.
+- Certified artifact checksum, provenance, source binding, signing binding,
+  and immutability.
+- Certified persisted GitHub Artifacts by downloading and re-verifying the
+  uploaded binary, checksum, and provenance manifest.
+- Verified that PROD BUILD fails closed when requested from `develop`.
+
+## [1.12.0] - 2026-08-29
+
+### Added
+
+- Added controlled virtual amount input for income and expense forms.
+- Added `VirtualKeyWidget` as an accessible primitive for virtual keyboard actions.
+- Added `VirtualAmountKeyboardWidget` for digit-only monetary input.
+- Added `AmountMagnifierWidget` with live formatted amount preview.
+- Added explicit amount-editing intents and state management in `BlocIncomeForm`.
+- Added widget and integration coverage for the complete controlled amount-entry flow.
+- Added explicit runtime environment selection through `--dart-define=OKANE_ENV=<dev|qa|prod>`.
+- Added reusable read-only Flutter validation for push and pull-request workflows.
+- Added configurable pull-request line coverage gate through `COVERAGE_MIN`.
+- Added concise GitHub Actions summaries for base validation, tests and coverage.
+- Added deterministic manual version preparation through `prepare_version.yaml`.
+
+### Changed
+
+- Updated project dependencies to their latest compatible versions.
+- Updated Android Gradle, Android Gradle Plugin and Kotlin tooling for compatibility with the current Flutter SDK.
+- Migrated Okane to use the transversal `ProjectorWidget` provided by `jocaaguraarchetype`.
+- Changed the local environment implementation to `OkaneEnv extends Env`.
+- Amount entry now stores only canonical numeric digits while Okane controls monetary presentation.
+- Monetary preview preserves the current Colombian accounting representation with two decimal places.
+- `FormLedgerWidget` now resolves `AppManager` from the application context instead of the global composition root.
+- Unified pull-request validation for `develop` and `master` using the same reusable base validation authority.
+- Separated repository verification from version preparation, artifact generation and publication responsibilities.
+- Defined `develop` as the only canonical branch writable by the VERSION workflow.
+
+### Fixed
+
+- Removed `Env` and `ProjectorWidget` symbol collisions introduced by the Archetype dependency upgrade.
+- Prevented the native keyboard from interfering with controlled monetary input.
+- Preserved amount values when closing and reopening the virtual amount editor.
+- Removed duplicated CI validation logic and non-authoritative checks from the previous workflows.
+
+### Quality
+
+- Expanded the automated suite to 97 passing tests.
+- Added coverage for amount sanitization, formatting, virtual-key interactions, accessibility semantics and income/expense integration.
+- Established a repository coverage gate with a baseline of 40%.
+- Certified both PASS and FAIL paths of the coverage gate.
+- Added deterministic version monotonicity, CHANGELOG homologation and rerun-idempotency contracts.
 
 ## [1.11.0] - 2025-09-28
 

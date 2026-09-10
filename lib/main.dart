@@ -10,6 +10,7 @@ import 'ui/theme/global_theme.dart';
 import 'ui/views/splash_screen_view.dart';
 import 'ui/views/views.dart';
 
+/// flutter run --dart-define=OKANE_ENV=dev
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {

@@ -7,7 +7,6 @@ import '../ui_constants.dart';
 import '../widgets/balance_widget.dart';
 import '../widgets/circle_avatar_widget.dart';
 import '../widgets/okane_page_builder.dart';
-import '../widgets/projector_widget.dart';
 import '../widgets/square_button_widget.dart';
 import 'expenses_view.dart';
 import 'income_view.dart';
